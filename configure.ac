@@ -488,6 +488,7 @@ case $host in
      CPPFLAGS="$CPPFLAGS -DMAC_OSX"
      ;;
    *linux*)
+     TARGET_OS=linux
      LEVELDB_TARGET_FLAGS="-DOS_LINUX"
      ;;
    *)
