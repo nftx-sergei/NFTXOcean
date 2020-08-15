@@ -4758,8 +4758,8 @@ UniValue MarmaraCreditloop(const CPubKey & remotepk, uint256 txid)
                         result.push_back(Pair("matures", static_cast<int64_t>(loopData.matures))); // used true "height" instead
                         Getscriptaddress(vout0addr, lasttx.vout[0].scriptPubKey);
                         result.push_back(Pair("txidaddr", vout0addr));  //TODO: why 'txidaddr'?
-                        if (lasttx.vout.size() > 1)
-                            result.push_back(Pair("collected", ValueFromAmount(lasttx.vout[1].nValue)));
+                        if (lasttx.vout.size() > 0)
+                            result.push_back(Pair("collected", ValueFromAmount(lasttx.vout[0].nValue)));
                     }
                     else
                     {
