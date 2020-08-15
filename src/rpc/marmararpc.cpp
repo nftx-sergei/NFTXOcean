@@ -694,6 +694,22 @@ UniValue marmara_decodetxdata(const UniValue& params, bool fHelp, const CPubKey&
     return result;
 }
 
+// marmaraaddressamountstat rpc impl, return PoS statistics
+UniValue marmara_addressamountstat(const UniValue& params, bool fHelp, const CPubKey& remotepk)
+{
+    CCerror.clear();
+    if (fHelp || params.size() != 0)
+    {
+        throw runtime_error("marmaraaddressamountstat\n"
+            "returns amounts\n"
+            "\n");
+    }
+
+    UniValue result = MarmaraAddressAmountStat();
+    RETURN_IF_ERROR(CCerror);
+    return result;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                actor (function)        okSafeMode
   //  -------------- ------------------------  -----------------------  ----------
@@ -714,7 +730,8 @@ static const CRPCCommand commands[] =
     { "marmara",       "marmaraposstat",   &marmara_posstat,      true },
     { "marmara",       "marmaraunlock",   &marmara_unlock,      true },
     { "marmara",       "marmarareceivelist",   &marmara_receivelist,      true },
-    { "marmara",       "marmaradecodetxdata",   &marmara_decodetxdata,      true }
+    { "marmara",       "marmaradecodetxdata",   &marmara_decodetxdata,      true },
+    { "marmara",       "marmaraaddressamountstat",   &marmara_addressamountstat,      true }
 };
 
 void RegisterMarmaraRPCCommands(CRPCTable &tableRPC)

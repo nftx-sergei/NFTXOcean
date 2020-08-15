@@ -770,3 +770,45 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
 
     return true;
 }
+
+// custom util to read all unspents, normal and cc (used in marmara)
+bool CBlockTreeDB::ReadAllUnspentIndex(std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &unspentOutputs) {
+
+    boost::scoped_ptr<CDBIterator> pcursor(NewIterator());
+
+    pcursor->SeekToFirst();
+
+    while (pcursor->Valid()) {
+        boost::this_thread::interruption_point();
+        try {
+            CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+            pair<char, CAddressUnspentKey> keyObj;
+            pcursor->GetKey(keyObj);
+            char chType = keyObj.first;
+            CAddressUnspentKey indexKey = keyObj.second;
+
+            if (chType == DB_ADDRESSUNSPENTINDEX) {
+                try {
+                    CAddressUnspentValue nValue;
+                    pcursor->GetValue(nValue);
+                    unspentOutputs.push_back(make_pair(indexKey, nValue));
+                }
+                catch (const std::exception& e) {
+                    return error("failed to get address unspent value");
+                }
+            }
+            else {
+                //break;
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << __func__ << " " << "exception:" << e.what() << std::endl;
+            break;
+        }
+        pcursor->Next();
+
+    }
+    return true;
+}
+
+

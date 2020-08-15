@@ -18,6 +18,8 @@
 #include <list>
 #include <algorithm>
 
+#include "main.h"
+#include "txdb.h"
 #include "komodo_defs.h"
 #include "CCMarmara.h"
 #include "key_io.h"
@@ -5916,4 +5918,118 @@ static bool skipBadLoop(const uint256 &refbatontxid)
 static bool fixBadSettle(const uint256 &settletxid)
 {
     return Parseuint256("57ae9f4a36ece775041ede5f0792831861428552f16eaf44cff9001020542d05") == settletxid && get_next_height() < MARMARA_POS_IMPROVEMENTS_HEIGHT;
+}
+
+
+// unspent amounts stat
+UniValue MarmaraAddressAmountStat()
+{
+    UniValue result(UniValue::VOBJ);
+    UniValue array(UniValue::VARR);
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
+
+    std::map<std::string, CAmount> normals;
+    std::map<std::string, CAmount> activated;
+    std::map<std::string, CAmount> lcl;
+    std::map<std::string, CAmount> unk;
+    std::map<std::string, CAmount> scr;
+
+
+    if (!pblocktree->ReadAllUnspentIndex(unspentOutputs))
+        return error("unable to get txids for address");
+
+    for (auto const &u : unspentOutputs)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        if (u.first.type == 3) // cc
+        {
+            CTransaction tx;
+            uint256 hb, crtxid;
+
+            if (myGetTransaction(u.first.txhash, tx, hb)) {
+                CPubKey pk;
+                char addr[KOMODO_ADDRESS_BUFSIZE];
+                Getscriptaddress(addr, tx.vout[u.first.index].scriptPubKey);
+                if (IsMarmaraActivatedVout(tx, u.first.index, pk, crtxid)) {
+                    activated[addr] += tx.vout[u.first.index].nValue;
+                }
+                else if (IsMarmaraLockedInLoopVout(tx, u.first.index, pk, crtxid)) {
+                    lcl[addr] += tx.vout[u.first.index].nValue;
+                }
+                else
+                {
+                    unk[addr] += tx.vout[u.first.index].nValue;
+                }
+            }
+            else
+                std::cerr << __func__ << " " << "could not read a tx=" << u.first.txhash.GetHex() << std::endl;
+
+        }
+        else if (u.first.type == 1) // normal
+        {
+            char addr[KOMODO_ADDRESS_BUFSIZE];
+            Getscriptaddress(addr, u.second.script);
+            normals[addr] += u.second.satoshis;
+        }
+        else // if (u.first.type == 2) // script
+        {
+            char addr[KOMODO_ADDRESS_BUFSIZE];
+            Getscriptaddress(addr, u.second.script);
+            scr[addr] += u.second.satoshis;
+        }
+    }
+
+    for (auto const &a : normals)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        elem.push_back(Pair("address", a.first));
+        elem.push_back(Pair("amount", a.second));
+        elem.push_back(Pair("type", "normal"));
+        array.push_back(elem);
+    }
+
+    for (auto const &a : activated)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        elem.push_back(Pair("address", a.first));
+        elem.push_back(Pair("amount", a.second));
+        elem.push_back(Pair("type", "activated"));
+        array.push_back(elem);
+    }
+
+    for (auto const &a : lcl)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        elem.push_back(Pair("address", a.first));
+        elem.push_back(Pair("amount", a.second));
+        elem.push_back(Pair("type", "lcl"));
+        array.push_back(elem);
+    }
+
+    for (auto const &a : unk)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        elem.push_back(Pair("address", a.first));
+        elem.push_back(Pair("amount", a.second));
+        elem.push_back(Pair("type", "cc-unknown"));
+        array.push_back(elem);
+    }
+
+    for (auto const &a : scr)
+    {
+        UniValue elem(UniValue::VOBJ);
+
+        elem.push_back(Pair("address", a.first));
+        elem.push_back(Pair("amount", a.second));
+        elem.push_back(Pair("type", "p-to-script-hash"));
+        array.push_back(elem);
+    }
+
+    result.push_back(Pair("addresses-with-unspent-amounts", array));
+    return result;
 }
