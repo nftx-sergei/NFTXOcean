@@ -5928,7 +5928,7 @@ UniValue MarmaraAddressAmountStat()
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
 
     CAmount normals = 0LL;
-    CAmount ppsh = 0LL
+    CAmount ppsh = 0LL;
     CAmount lcl = 0LL;
     CAmount activated = 0LL;
     CAmount ccunk = 0LL;
