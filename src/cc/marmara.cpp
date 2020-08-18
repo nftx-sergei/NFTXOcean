@@ -5925,15 +5925,13 @@ static bool fixBadSettle(const uint256 &settletxid)
 UniValue MarmaraAddressAmountStat()
 {
     UniValue result(UniValue::VOBJ);
-    UniValue array(UniValue::VARR);
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
 
-    std::map<std::string, CAmount> normals;
-    std::map<std::string, CAmount> activated;
-    std::map<std::string, CAmount> lcl;
-    std::map<std::string, CAmount> unk;
-    std::map<std::string, CAmount> scr;
-
+    CAmount normals = 0LL;
+    CAmount ppsh = 0LL
+    CAmount lcl = 0LL;
+    CAmount activated = 0LL;
+    CAmount ccunk = 0LL;
 
     if (!pblocktree->ReadAllUnspentIndex(unspentOutputs))
         return error("unable to get txids for address");
@@ -5949,17 +5947,17 @@ UniValue MarmaraAddressAmountStat()
 
             if (myGetTransaction(u.first.txhash, tx, hb)) {
                 CPubKey pk;
-                char addr[KOMODO_ADDRESS_BUFSIZE];
-                Getscriptaddress(addr, tx.vout[u.first.index].scriptPubKey);
+                //char addr[KOMODO_ADDRESS_BUFSIZE];
+                //Getscriptaddress(addr, tx.vout[u.first.index].scriptPubKey);
                 if (IsMarmaraActivatedVout(tx, u.first.index, pk, crtxid)) {
-                    activated[addr] += tx.vout[u.first.index].nValue;
+                    activated += tx.vout[u.first.index].nValue;
                 }
                 else if (IsMarmaraLockedInLoopVout(tx, u.first.index, pk, crtxid)) {
-                    lcl[addr] += tx.vout[u.first.index].nValue;
+                    lcl += tx.vout[u.first.index].nValue;
                 }
                 else
                 {
-                    unk[addr] += tx.vout[u.first.index].nValue;
+                    ccunk += tx.vout[u.first.index].nValue;
                 }
             }
             else
@@ -5968,68 +5966,23 @@ UniValue MarmaraAddressAmountStat()
         }
         else if (u.first.type == 1) // normal
         {
-            char addr[KOMODO_ADDRESS_BUFSIZE];
-            Getscriptaddress(addr, u.second.script);
-            normals[addr] += u.second.satoshis;
+            //char addr[KOMODO_ADDRESS_BUFSIZE];
+            //Getscriptaddress(addr, u.second.script);
+            normals += u.second.satoshis;
         }
         else // if (u.first.type == 2) // script
         {
-            char addr[KOMODO_ADDRESS_BUFSIZE];
-            Getscriptaddress(addr, u.second.script);
-            scr[addr] += u.second.satoshis;
+            //char addr[KOMODO_ADDRESS_BUFSIZE];
+            //Getscriptaddress(addr, u.second.script);
+            ppsh += u.second.satoshis;
         }
     }
 
-    for (auto const &a : normals)
-    {
-        UniValue elem(UniValue::VOBJ);
+    result.push_back(Pair("TotalNormals", normals));
+    result.push_back(Pair("TotalPayToScriptHash", ppsh));
+    result.push_back(Pair("TotalActivated", activated));
+    result.push_back(Pair("TotalLockedInLoops", lcl));
+    result.push_back(Pair("TotalUnknownCC", ccunk));
 
-        elem.push_back(Pair("address", a.first));
-        elem.push_back(Pair("amount", a.second));
-        elem.push_back(Pair("type", "normal"));
-        array.push_back(elem);
-    }
-
-    for (auto const &a : activated)
-    {
-        UniValue elem(UniValue::VOBJ);
-
-        elem.push_back(Pair("address", a.first));
-        elem.push_back(Pair("amount", a.second));
-        elem.push_back(Pair("type", "activated"));
-        array.push_back(elem);
-    }
-
-    for (auto const &a : lcl)
-    {
-        UniValue elem(UniValue::VOBJ);
-
-        elem.push_back(Pair("address", a.first));
-        elem.push_back(Pair("amount", a.second));
-        elem.push_back(Pair("type", "lcl"));
-        array.push_back(elem);
-    }
-
-    for (auto const &a : unk)
-    {
-        UniValue elem(UniValue::VOBJ);
-
-        elem.push_back(Pair("address", a.first));
-        elem.push_back(Pair("amount", a.second));
-        elem.push_back(Pair("type", "cc-unknown"));
-        array.push_back(elem);
-    }
-
-    for (auto const &a : scr)
-    {
-        UniValue elem(UniValue::VOBJ);
-
-        elem.push_back(Pair("address", a.first));
-        elem.push_back(Pair("amount", a.second));
-        elem.push_back(Pair("type", "p-to-script-hash"));
-        array.push_back(elem);
-    }
-
-    result.push_back(Pair("addresses-with-unspent-amounts", array));
     return result;
 }
