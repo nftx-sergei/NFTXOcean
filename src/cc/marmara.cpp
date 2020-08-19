@@ -5566,6 +5566,9 @@ UniValue MarmaraReceiveList(const CPubKey &pk, int32_t maxage)
     for (std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >::const_iterator it = unspentOutputs.begin(); it != unspentOutputs.end(); it++)
     {
         txid = it->first.txhash;
+        if (get_next_height() - it->second.blockHeight > maxage)  // skip too old request txns
+            continue;
+
         LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << " txid=" << txid.GetHex() << std::endl);
         if (myGetTransaction(txid, tx, hashBlock) && !hashBlock.IsNull())
         {
@@ -5581,8 +5584,7 @@ UniValue MarmaraReceiveList(const CPubKey &pk, int32_t maxage)
 
                 if (funcid == MARMARA_CREATELOOP || funcid == MARMARA_REQUEST)    
                 {
-                    if (loopData.matures > chainActive.LastTip()->GetHeight() &&    // add request txns only for active loops
-                        chainActive.LastTip()->GetHeight() - get_block_height(hashBlock) < maxage)  // add request txns that are not older maxage
+                    if (loopData.matures > chainActive.LastTip()->GetHeight())   // add request txns only for active loops
                     {
                         LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << " adding txid=" << txid.GetHex() << std::endl);
                         UniValue info(UniValue::VOBJ);
@@ -5594,8 +5596,10 @@ UniValue MarmaraReceiveList(const CPubKey &pk, int32_t maxage)
                         info.push_back(Pair("matures", loopData.matures));
                         
                         // get first normal input pubkey to get who is the receiver:
-                        CPubKey pk = GetFirstNormalInputPubKey(tx);
-                        info.push_back(Pair("receivepk", HexStr(pk)));
+                        CPubKey receiverpk = GetFirstNormalInputPubKey(tx);
+                        info.push_back(Pair("receivepk", HexStr(receiverpk)));
+                        info.push_back(Pair("issuerpk", HexStr(loopData.pk)));
+
                         result.push_back(info);
                     }
                 }

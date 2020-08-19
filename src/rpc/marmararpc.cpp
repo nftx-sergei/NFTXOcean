@@ -646,7 +646,7 @@ UniValue marmara_receivelist(const UniValue& params, bool fHelp, const CPubKey& 
     if (fHelp || (params.size() < 1 || params.size() > 2))
     {
         throw runtime_error("marmarareceivelist pubkey [maxage]\n"
-            "list unspent marmarareceive transactions on pubkey. If 'maxage' (in blocktime value) is set than returns txns not not older than the maxage\n" "\n");
+            "list unspent marmarareceive transactions for the pubkey, the txns' age is not older than the 'maxage' (in 'blocktime periods, default is 24*60)\n" "\n");
     }
 
     vuint8_t vpk = ParseHex(params[0].get_str().c_str());
