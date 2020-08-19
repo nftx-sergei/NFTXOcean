@@ -5152,6 +5152,22 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
     struct CCcontract_info *cp, C;
     cp = CCinit(&C, EVAL_MARMARA);
 
+    if (refpk.size() == CPubKey::COMPRESSED_PUBLIC_KEY_SIZE)
+        result.push_back(Pair("holder", HexStr(refpk)));
+    if (currencyparam.empty())
+        currency = MARMARA_CURRENCY;
+    else
+        currency = currencyparam;
+    if (firstheight <= lastheight)
+        firstheight = 0, lastheight = (1 << 30);
+    if (minamount <= maxamount)
+        minamount = 0, maxamount = (1LL << 60);
+    result.push_back(Pair("firstheight", static_cast<int64_t>(firstheight)));
+    result.push_back(Pair("lastheight", static_cast<int64_t>(lastheight)));
+    result.push_back(Pair("minamount", ValueFromAmount(minamount)));
+    result.push_back(Pair("maxamount", ValueFromAmount(maxamount)));
+    result.push_back(Pair("currency", currency));
+
     enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, nullpk, currency, 
         [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
         {
