@@ -327,7 +327,10 @@ UniValue marmara_info(const UniValue& params, bool fHelp, const CPubKey& remotep
 
     if ( fHelp || params.size() < 4 || params.size() > 6 )
     {
-        throw runtime_error("marmarainfo firstheight lastheight minamount maxamount [pk currency]\n");
+        throw runtime_error("marmarainfo firstheight lastheight minamount maxamount [pk currency]\n"
+                            "returns open and closed loops (if pk is set than returns loops only for this pk\n"
+                            "the returned info amount might be constrained by setting first and last height and min and max amount\n"
+                            "if those params are 0 than returns all avaiable data\n");
     }
     if ( ensure_CCrequirements(EVAL_MARMARA) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
@@ -383,7 +386,10 @@ UniValue marmara_holderloops(const UniValue& params, bool fHelp, const CPubKey& 
 
     if (fHelp || params.size() < 5 || params.size() > 6)
     {
-        throw runtime_error("marmaraholderloops firstheight lastheight minamount maxamount pk [currency]\n");
+        throw runtime_error("marmaraholderloops firstheight lastheight minamount maxamount pk [currency]\n" 
+                            "returns open and closed loops where the pr is the holder\n"
+                            "the returned info amount might be constrained by setting first and last height and min and max amount\n"
+                            "if those params are 0 than returns all avaiable data\n");
     }
     if ( ensure_CCrequirements(EVAL_MARMARA) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
@@ -637,10 +643,10 @@ UniValue marmara_receivelist(const UniValue& params, bool fHelp, const CPubKey& 
     if (ensure_CCrequirements(EVAL_MARMARA) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
 
-    if (fHelp || params.size() != 1)
+    if (fHelp || (params.size() < 1 || params.size() > 2))
     {
-        throw runtime_error("marmarareceivelist pubkey\n"
-            "list unspent marmarareceive transactions on pubkey\n" "\n");
+        throw runtime_error("marmarareceivelist pubkey [maxage]\n"
+            "list unspent marmarareceive transactions on pubkey. If 'maxage' (in blocktime value) is set than returns txns not not older than the maxage\n" "\n");
     }
 
     vuint8_t vpk = ParseHex(params[0].get_str().c_str());
@@ -657,8 +663,11 @@ UniValue marmara_receivelist(const UniValue& params, bool fHelp, const CPubKey& 
         ERR_RESULT("invalid pubkey parameter");
         return result;
     }
+    int32_t maxage = MARMARA_REQUEST_MAX_AGE_DEFAULT;
+    if (params.size() == 2) 
+        maxage = atoi(params[1].get_str().c_str());
 
-    UniValue result = MarmaraReceiveList(pk);    
+    UniValue result = MarmaraReceiveList(pk, maxage);    
     return result;
 }
 

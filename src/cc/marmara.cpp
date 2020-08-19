@@ -5100,9 +5100,9 @@ UniValue MarmaraInfo(const CPubKey &refpk, int32_t firstheight, int32_t lastheig
     else
         currency = currencyparam;
     if (firstheight <= lastheight)
-        firstheight = 0, lastheight = (1 << 30);
+        firstheight = 0, lastheight = INT32_MAX;
     if (minamount <= maxamount)
-        minamount = 0, maxamount = (1LL << 60);
+        minamount = 0, maxamount = LLONG_MAX;
     result.push_back(Pair("firstheight", static_cast<int64_t>(firstheight)));
     result.push_back(Pair("lastheight", static_cast<int64_t>(lastheight)));
     result.push_back(Pair("minamount", ValueFromAmount(minamount)));
@@ -5159,9 +5159,9 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
     else
         currency = currencyparam;
     if (firstheight <= lastheight)
-        firstheight = 0, lastheight = (1 << 30);
+        firstheight = 0, lastheight = INT32_MAX;
     if (minamount <= maxamount)
-        minamount = 0, maxamount = (1LL << 60);
+        minamount = 0, maxamount = LLONG_MAX;
     result.push_back(Pair("firstheight", static_cast<int64_t>(firstheight)));
     result.push_back(Pair("lastheight", static_cast<int64_t>(lastheight)));
     result.push_back(Pair("minamount", ValueFromAmount(minamount)));
@@ -5171,7 +5171,7 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
     enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, nullpk, currency, 
         [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
         {
-            std::cerr << __func__ << " issuancetx=" << issuancetx.GetHash().GetHex() << " loopData.pk=" << HexStr(loopData.pk) << " refpk=" << HexStr(refpk) << std::endl;
+            // std::cerr << __func__ << " issuancetx=" << issuancetx.GetHash().GetHex() << " loopData.pk=" << HexStr(loopData.pk) << " refpk=" << HexStr(refpk) << std::endl;
             if (loopData.pk == refpk)   {  // loopData is updated with last loop baton or settle tx
                 if (settletx.IsNull())  {
                     issuances.push_back(issuancetx.GetHash());
@@ -5548,7 +5548,7 @@ std::string MarmaraUnlockActivatedCoins(CAmount amount)
     }
 }
 
-UniValue MarmaraReceiveList(const CPubKey &pk)
+UniValue MarmaraReceiveList(const CPubKey &pk, int32_t maxage)
 {
     UniValue result(UniValue::VARR);
     char coinaddr[KOMODO_ADDRESS_BUFSIZE];
@@ -5575,21 +5575,29 @@ UniValue MarmaraReceiveList(const CPubKey &pk)
                 SMarmaraCreditLoopOpret loopData;
                 uint8_t funcid = MarmaraDecodeLoopOpret(tx.vout.back().scriptPubKey, loopData, MARMARA_OPRET_VERSION_ANY);
                 LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << " MarmaraDecodeLoopOpret funcid=" << (int)funcid << std::endl);
-                if (funcid == MARMARA_CREATELOOP || funcid == MARMARA_REQUEST)    {
-                    LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << " adding txid=" << txid.GetHex() << std::endl);
-                    UniValue info(UniValue::VOBJ);
-                    info.push_back(Pair("version", (int)loopData.version));
-                    info.push_back(Pair("txid", txid.GetHex()));
-                    info.push_back(Pair("funcid", std::string(1, funcid)));
-                    if (funcid == MARMARA_CREATELOOP)   {
+                if (funcid == MARMARA_REQUEST)  {
+                    get_loop_creation_data(loopData.createtxid, loopData, 0); // update with loop creation data
+                }
+
+                if (funcid == MARMARA_CREATELOOP || funcid == MARMARA_REQUEST)    
+                {
+                    if (loopData.matures > chainActive.LastTip()->GetHeight() &&    // add request txns only for active loops
+                        chainActive.LastTip()->GetHeight() - get_block_height(hashBlock) < maxage)  // add request txns that are not older maxage
+                    {
+                        LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << " adding txid=" << txid.GetHex() << std::endl);
+                        UniValue info(UniValue::VOBJ);
+                        info.push_back(Pair("version", (int)loopData.version));
+                        info.push_back(Pair("txid", txid.GetHex()));
+                        info.push_back(Pair("creationtxid", loopData.createtxid.GetHex()));
+                        info.push_back(Pair("funcid", std::string(1, funcid)));
                         info.push_back(Pair("amount", ValueFromAmount(loopData.amount)));
                         info.push_back(Pair("matures", loopData.matures));
+                        
+                        // get first normal input pubkey to get who is the receiver:
+                        CPubKey pk = GetFirstNormalInputPubKey(tx);
+                        info.push_back(Pair("receivepk", HexStr(pk)));
+                        result.push_back(info);
                     }
-
-                    // get first normal input pubkey to get who is the receiver:
-                    CPubKey pk = GetFirstNormalInputPubKey(tx);
-                    info.push_back(Pair("receivepk", HexStr(pk)));
-                    result.push_back(info);
                 }
             }
         }

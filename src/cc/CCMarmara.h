@@ -82,6 +82,7 @@ const int32_t MARMARA_LOOP_MARKER_AMOUNT = 10000;
 const int32_t MARMARA_OPEN_MARKER_AMOUNT = 10000;
 const int32_t MARMARA_SETTLE_VOUT = 0;
 
+const int32_t MARMARA_REQUEST_MAX_AGE_DEFAULT = 24 * 60;
 
 #define MARMARA_OPRET_VERSION_ANY 0
 #define MARMARA_OPRET_VERSION_DEFAULT 1
@@ -146,7 +147,7 @@ UniValue MarmaraListActivatedAddresses(CWallet *pwalletMain);
 std::string MarmaraReleaseActivatedCoins(CWallet *pwalletMain, const std::string &destaddr);
 UniValue MarmaraPoSStat(int32_t beginHeight, int32_t endHeight);
 std::string MarmaraUnlockActivatedCoins(CAmount amount);
-UniValue MarmaraReceiveList(const CPubKey &pk);
+UniValue MarmaraReceiveList(const CPubKey &pk, int32_t maxage);
 UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t lastheight, int64_t minamount, int64_t maxamount, const std::string &currencyparam);
 
 bool MarmaraValidate(struct CCcontract_info *cp, Eval* eval, const CTransaction &tx, uint32_t nIn);
