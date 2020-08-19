@@ -372,6 +372,48 @@ UniValue marmara_info(const UniValue& params, bool fHelp, const CPubKey& remotep
     return(result);
 }
 
+UniValue marmara_holderloops(const UniValue& params, bool fHelp, const CPubKey& remotepk)
+{
+    UniValue result(UniValue::VOBJ); 
+    CPubKey pk; 
+    std::vector<uint8_t> vpk; 
+    int64_t minamount,maxamount; 
+    int32_t firstheight,lastheight; 
+    std::string currency;
+
+    if (fHelp || params.size() < 5 || params.size() > 6)
+    {
+        throw runtime_error("marmaraholderloops firstheight lastheight minamount maxamount pk [currency]\n");
+    }
+    if ( ensure_CCrequirements(EVAL_MARMARA) < 0 )
+        throw runtime_error(CC_REQUIREMENTS_MSG);
+
+    firstheight = atol(params[0].get_str().c_str());
+    lastheight = atol(params[1].get_str().c_str());
+    minamount = AmountFromValue(params[2]);
+    maxamount = AmountFromValue(params[3]);
+    if (params.size() >= 5) 
+    {
+        vpk = ParseHex(params[4].get_str().c_str());
+        if (vpk.size() != CPubKey::COMPRESSED_PUBLIC_KEY_SIZE)
+        {
+            ERR_RESULT("invalid pubkey parameter");
+            return result;
+        }
+        pk = pubkey2pk(vpk);
+        if (!pk.IsFullyValid())
+        {
+            ERR_RESULT("invalid pubkey parameter");
+            return result;
+        }
+        if (params.size() == 6)
+            currency = params[5].get_str();
+    }
+    result = MarmaraHolderLoops(pk, firstheight, lastheight, minamount, maxamount, currency);
+    return(result);
+}
+
+
 UniValue marmara_creditloop(const UniValue& params, bool fHelp, const CPubKey& remotepk)
 {
     UniValue result(UniValue::VOBJ); uint256 txid;
@@ -731,7 +773,8 @@ static const CRPCCommand commands[] =
     { "marmara",       "marmaraunlock",   &marmara_unlock,      true },
     { "marmara",       "marmarareceivelist",   &marmara_receivelist,      true },
     { "marmara",       "marmaradecodetxdata",   &marmara_decodetxdata,      true },
-    { "marmara",       "marmaraaddressamountstat",   &marmara_addressamountstat,      true }
+    { "marmara",       "marmaraaddressamountstat",   &marmara_addressamountstat,      true },
+    { "marmara",       "marmaraholderloop",   &marmara_holderloops,      true }
 };
 
 void RegisterMarmaraRPCCommands(CRPCTable &tableRPC)

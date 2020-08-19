@@ -4061,11 +4061,11 @@ UniValue MarmaraSettlement(int64_t txfee, uint256 refbatontxid, CTransaction &se
     return(result);
 }
 
-// enums credit loops (for the pk or all if null pk passed)
-// returns pending and closed txids (only for MARMARA_LOOP_MARKER_VOUT)
+// enums credit loops (for the refpk as the issuer or all if null refpk passed)
+// calls the callback for pending and closed txids (if MARMARA_LOOP_MARKER_VOUT is passed) or only for pending loops (if MARMARA_OPENCLOSE_VOUT is passed)
 // for pending loops calls 'callback' with params batontxid and mature height (or -1 if the loop is closed)
 template <class T>
-static int32_t enum_credit_loops(int32_t nVoutMarker, int64_t &totalopen, std::vector<uint256> &issuances, int64_t &totalclosed, std::vector<uint256> &closed, struct CCcontract_info *cp, int32_t firstheight, int32_t lastheight, int64_t minamount, int64_t maxamount, CPubKey refpk, std::string refcurrency, T callback/*void (*callback)(uint256 batontxid, int32_t matures)*/)
+static int32_t enum_credit_loops(int32_t nVoutMarker, struct CCcontract_info *cp, int32_t firstheight, int32_t lastheight, int64_t minamount, int64_t maxamount, const CPubKey &refpk, const std::string &refcurrency, T callback)
 {
     char marmaraaddr[KOMODO_ADDRESS_BUFSIZE]; 
     int32_t n = 0; 
@@ -4111,29 +4111,25 @@ static int32_t enum_credit_loops(int32_t nVoutMarker, int64_t &totalopen, std::v
                                     continue;
                                 }
 
+                                CTransaction settletx;
+                                CTransaction batontx;
+                                uint256 hashBlock;
+                                uint8_t funcid;
+
                                 if (get_settlement_txid(settletxid, issuancetxid) == 0)
                                 {
-                                    CTransaction settletx;
-                                    uint256 hashBlock;
-                                    uint8_t funcid;
-
                                     LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << "found settle tx for issueancetxid=" << issuancetxid.GetHex() << std::endl);
 
                                     if (myGetTransaction(settletxid, settletx, hashBlock) /*&& !hashBlock.IsNull()*/ && settletx.vout.size() > 1 &&
                                         (funcid = MarmaraDecodeLoopOpret(settletx.vout.back().scriptPubKey, loopData, MARMARA_OPRET_VERSION_ANY)) != 0)
                                     {
-                                        closed.push_back(issuancetxid);
-                                        totalclosed += loopData.amount;
+                                        callback(issuancetx, batontx, settletx, loopData);
                                     }
                                     else 
                                         LOGSTREAMFN("marmara", CCLOG_INFO, stream << "could not get or decode settletx=" << settletxid.GetHex() << " (tx could be in mempool)" << std::endl);
                                 }
                                 else if (MarmaraGetbatontxid(creditloop, batontxid, issuancetxid) > 0)
                                 {
-                                    CTransaction batontx;
-                                    uint256 hashBlock;
-                                    uint8_t funcid;
-
                                     LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << "found baton tx for issueancetxid=" << issuancetxid.GetHex() << std::endl);
 
                                     if (myGetTransaction(batontxid, batontx, hashBlock) /*&& !hashBlock.IsNull()*/ && batontx.vout.size() > 1 &&
@@ -4141,7 +4137,7 @@ static int32_t enum_credit_loops(int32_t nVoutMarker, int64_t &totalopen, std::v
                                     {
                                         issuances.push_back(issuancetxid);
                                         totalopen += loopData.amount;
-                                        callback(batontxid, loopData.matures);
+                                        callback(issuancetx, batontx, settletx, loopData);
                                     }
                                     else
                                         LOGSTREAMFN("marmara", CCLOG_INFO, stream << "could not get or decode batontx=" << batontxid.GetHex() << " (baton could be in mempool)" << std::endl);
@@ -4185,29 +4181,35 @@ void MarmaraRunAutoSettlement(int32_t height, std::vector<CTransaction> & settle
     }
 
     LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << "starting enum open batons" << std::endl);
-    enum_credit_loops(MARMARA_OPENCLOSE_VOUT, totalopen, issuances, totalclosed, closed, cp, firstheight, lastheight, minamount, maxamount, CPubKey(), MARMARA_CURRENCY, [&](uint256 batontxid, int32_t matures) 
-    {
-        CTransaction settlementtx;
-        //TODO: temp UniValue result legacy code, change to remove UniValue
-
-        if (chainActive.LastTip()->GetHeight() >= matures + 5)   //check height if matured 
+    enum_credit_loops(MARMARA_OPENCLOSE_VOUT, cp, firstheight, lastheight, minamount, maxamount, CPubKey(), MARMARA_CURRENCY, 
+        [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) // loopData is updated with last tx opret
         {
-            LOGSTREAM("marmara", CCLOG_DEBUG2, stream << funcname << " " << "miner calling settlement for batontxid=" << batontxid.GetHex() << std::endl);
+            if (settletx.IsNull() && !batontx.IsNull())  // not settled already
+            {
+                CTransaction newSettleTx;
+                uint256 batontxid = batontx.GetHash();
+                //TODO: temp UniValue result legacy code, change to remove UniValue
 
-            UniValue result = MarmaraSettlement(0, batontxid, settlementtx);
-            if (result["result"].getValStr() == "success") {
-                LOGSTREAM("marmara", CCLOG_INFO, stream << funcname << " " << "miner created settlement tx=" << settlementtx.GetHash().GetHex() <<  ", for batontxid=" << batontxid.GetHex() << std::endl);
-                settlementTransactions.push_back(settlementtx);
-            }
-            else if (result["result"].getValStr() == "warning") {
-                LOGSTREAM("marmara", CCLOG_DEBUG1, stream << funcname << " " << "warning=" << result["warning"].getValStr() << " in settlement for batontxid=" << batontxid.GetHex() << std::endl);
-                settlementTransactions.push_back(settlementtx);
-            }
-            else {
-                LOGSTREAM("marmara", CCLOG_ERROR, stream << funcname << " " << "error=" << result["error"].getValStr() << " in settlement for batontxid=" << batontxid.GetHex() << std::endl);
+                if (chainActive.LastTip()->GetHeight() >= loopData.matures + 5)   //check height if matured (allow 5 block delay to prevent use of remote txns sent into mempool)
+                {
+                    LOGSTREAM("marmara", CCLOG_DEBUG2, stream << funcname << " " << "miner calling settlement for batontxid=" << batontxid.GetHex() << std::endl);
+
+                    UniValue result = MarmaraSettlement(0, batontxid, newSettleTx);
+                    if (result["result"].getValStr() == "success") {
+                        LOGSTREAM("marmara", CCLOG_INFO, stream << funcname << " " << "miner created settlement tx=" << newSettleTx.GetHash().GetHex() <<  ", for batontxid=" << batontxid.GetHex() << std::endl);
+                        settlementTransactions.push_back(newSettleTx);
+                    }
+                    else if (result["result"].getValStr() == "warning") {
+                        LOGSTREAM("marmara", CCLOG_DEBUG1, stream << funcname << " " << "warning=" << result["warning"].getValStr() << " in settlement for batontxid=" << batontxid.GetHex() << std::endl);
+                        settlementTransactions.push_back(newSettleTx);
+                    }
+                    else {
+                        LOGSTREAM("marmara", CCLOG_ERROR, stream << funcname << " " << "error=" << result["error"].getValStr() << " in settlement for batontxid=" << batontxid.GetHex() << std::endl);
+                    }
+                }
             }
         }
-    });
+    );
 }
 
 // create request tx for issuing or transfer baton (cheque) 
@@ -5010,15 +5012,14 @@ UniValue MarmaraPoolPayout(int64_t txfee, int32_t firstheight, double perc, char
     return(result);
 }
 
-// get all tx, constrain by vout, issuances[] and closed[]
-
+// list loops, open[] and closed[], for all pks or specific pk 
 UniValue MarmaraInfo(const CPubKey &refpk, int32_t firstheight, int32_t lastheight, int64_t minamount, int64_t maxamount, const std::string &currencyparam)
 {
     CMutableTransaction mtx; 
     std::string currency;
     std::vector<CPubKey> pubkeys;
     UniValue result(UniValue::VOBJ), a(UniValue::VARR), b(UniValue::VARR); 
-    int32_t n; int64_t totalclosed = 0, totalamount = 0; 
+    CAmount totalclosed = 0LL, totalopen = 0LL; 
     std::vector<uint256> issuances, closed; 
     CPubKey Marmarapk; 
     char mynormaladdr[KOMODO_ADDRESS_BUFSIZE];
@@ -5108,20 +5109,78 @@ UniValue MarmaraInfo(const CPubKey &refpk, int32_t firstheight, int32_t lastheig
     result.push_back(Pair("minamount", ValueFromAmount(minamount)));
     result.push_back(Pair("maxamount", ValueFromAmount(maxamount)));
     result.push_back(Pair("currency", currency));
-    if ((n = enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, totalamount, issuances, totalclosed, closed, cp, firstheight, lastheight, minamount, maxamount, refpk, currency, [](uint256, int32_t) {/*do nothing*/})) > 0)
-    {
-        result.push_back(Pair("n", static_cast<int64_t>(n)));
-        result.push_back(Pair("numpending", static_cast<int64_t>(issuances.size())));
-        for (int32_t i = 0; i < issuances.size(); i++)
-            a.push_back(issuances[i].GetHex());
-        result.push_back(Pair("issuances", a));
-        result.push_back(Pair("totalamount", ValueFromAmount(totalamount)));
-        result.push_back(Pair("numclosed", static_cast<int64_t>(closed.size())));
-        for (int32_t i = 0; i < closed.size(); i++)
-            b.push_back(closed[i].GetHex());
-        result.push_back(Pair("closed", b));
-        result.push_back(Pair("totalclosed", ValueFromAmount(totalclosed)));
-    }
+
+    totalopen = 0LL;
+    totalclosed = 0LL;
+    enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, refpk, currency, 
+        [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
+        {
+            if (settletx.IsNull())  {
+                issuances.push_back(issuancetx.GetHash());
+                totalopen += loopData.amount;
+            }
+            else {
+                closed.push_back(issuancetx.GetHash());
+                totalclosed += loopData.amount;
+            }
+        });
+    
+    result.push_back(Pair("n", static_cast<int64_t>(issuances.size() + closed.size())));
+    result.push_back(Pair("numpending", static_cast<int64_t>(issuances.size())));
+    for (int32_t i = 0; i < issuances.size(); i++)
+        a.push_back(issuances[i].GetHex());
+    result.push_back(Pair("issuances", a));
+    result.push_back(Pair("totalamount", ValueFromAmount(totalopen)));
+    result.push_back(Pair("numclosed", static_cast<int64_t>(closed.size())));
+    for (int32_t i = 0; i < closed.size(); i++)
+        b.push_back(closed[i].GetHex());
+    result.push_back(Pair("closed", b));
+    result.push_back(Pair("totalclosed", ValueFromAmount(totalclosed)));
+    
+    return(result);
+}
+
+// list loops, open[] and closed[], for the holder pk
+UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t lastheight, int64_t minamount, int64_t maxamount, const std::string &currencyparam)
+{
+    CMutableTransaction mtx; 
+    std::string currency;
+    std::vector<CPubKey> pubkeys;
+    UniValue result(UniValue::VOBJ), a(UniValue::VARR), b(UniValue::VARR); 
+    int32_t n; 
+    CAmount totalclosed = 0LL, totalopen = 0LL; 
+    std::vector<uint256> issuances, closed; 
+
+    struct CCcontract_info *cp, C;
+    cp = CCinit(&C, EVAL_MARMARA);
+
+    enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, refpk, currency, 
+        [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
+        {
+            if (loopData.pk == refpk)   {
+                if (settletx.IsNull())  {
+                    issuances.push_back(issuancetx.GetHash());
+                    totalopen += loopData.amount;
+                }
+                else {
+                    closed.push_back(issuancetx.GetHash());
+                    totalclosed += loopData.amount;
+                }
+            }
+        });
+    
+    result.push_back(Pair("n", static_cast<int64_t>(issuances.size() + closed.size())));
+    result.push_back(Pair("numpending", static_cast<int64_t>(issuances.size())));
+    for (int32_t i = 0; i < issuances.size(); i++)
+        a.push_back(issuances[i].GetHex());
+    result.push_back(Pair("issuances", a));
+    result.push_back(Pair("totalamount", ValueFromAmount(totalopen)));
+    result.push_back(Pair("numclosed", static_cast<int64_t>(closed.size())));
+    for (int32_t i = 0; i < closed.size(); i++)
+        b.push_back(closed[i].GetHex());
+    result.push_back(Pair("closed", b));
+    result.push_back(Pair("totalclosed", ValueFromAmount(totalclosed)));
+    
     return(result);
 }
 
