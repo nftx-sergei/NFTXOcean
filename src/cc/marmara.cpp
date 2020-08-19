@@ -4135,8 +4135,6 @@ static int32_t enum_credit_loops(int32_t nVoutMarker, struct CCcontract_info *cp
                                     if (myGetTransaction(batontxid, batontx, hashBlock) /*&& !hashBlock.IsNull()*/ && batontx.vout.size() > 1 &&
                                         (funcid = MarmaraDecodeLoopOpret(batontx.vout.back().scriptPubKey, loopData, MARMARA_OPRET_VERSION_ANY)) != 0)
                                     {
-                                        issuances.push_back(issuancetxid);
-                                        totalopen += loopData.amount;
                                         callback(issuancetx, batontx, settletx, loopData);
                                     }
                                     else
