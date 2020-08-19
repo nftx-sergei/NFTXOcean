@@ -4169,6 +4169,7 @@ void MarmaraRunAutoSettlement(int32_t height, std::vector<CTransaction> & settle
     struct CCcontract_info *cp, C;
     cp = CCinit(&C, EVAL_MARMARA);
     std::string funcname = __func__;
+    CPubKey nullpk;
 
     int32_t firstheight = 0, lastheight = (1 << 30);
     int64_t minamount = 0, maxamount = (1LL << 60);
@@ -4179,7 +4180,7 @@ void MarmaraRunAutoSettlement(int32_t height, std::vector<CTransaction> & settle
     }
 
     LOGSTREAMFN("marmara", CCLOG_DEBUG2, stream << "starting enum open batons" << std::endl);
-    enum_credit_loops(MARMARA_OPENCLOSE_VOUT, cp, firstheight, lastheight, minamount, maxamount, CPubKey(), MARMARA_CURRENCY, 
+    enum_credit_loops(MARMARA_OPENCLOSE_VOUT, cp, firstheight, lastheight, minamount, maxamount, nullpk, MARMARA_CURRENCY, 
         [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) // loopData is updated with last tx opret
         {
             if (settletx.IsNull() && !batontx.IsNull())  // not settled already
@@ -5154,6 +5155,7 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
     enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, nullpk, currency, 
         [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
         {
+            std::cerr << __func__ << " issuancetx=" << issuancetx.GetHash().GetHex() << " loopData.pk=" << HexStr(loopData.pk) << " refpk=" << HexStr(refpk) << std::endl;
             if (loopData.pk == refpk)   {  // loopData is updated with last loop baton or settle tx
                 if (settletx.IsNull())  {
                     issuances.push_back(issuancetx.GetHash());
