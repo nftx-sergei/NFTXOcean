@@ -5143,19 +5143,18 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
 {
     CMutableTransaction mtx; 
     std::string currency;
-    std::vector<CPubKey> pubkeys;
     UniValue result(UniValue::VOBJ), a(UniValue::VARR), b(UniValue::VARR); 
-    int32_t n; 
     CAmount totalclosed = 0LL, totalopen = 0LL; 
     std::vector<uint256> issuances, closed; 
+    CPubKey nullpk;
 
     struct CCcontract_info *cp, C;
     cp = CCinit(&C, EVAL_MARMARA);
 
-    enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, refpk, currency, 
+    enum_credit_loops(MARMARA_LOOP_MARKER_VOUT, cp, firstheight, lastheight, minamount, maxamount, nullpk, currency, 
         [&](const CTransaction &issuancetx, const CTransaction &batontx, const CTransaction &settletx, const SMarmaraCreditLoopOpret &loopData) 
         {
-            if (loopData.pk == refpk)   {
+            if (loopData.pk == refpk)   {  // loopData is updated with last loop baton or settle tx
                 if (settletx.IsNull())  {
                     issuances.push_back(issuancetx.GetHash());
                     totalopen += loopData.amount;

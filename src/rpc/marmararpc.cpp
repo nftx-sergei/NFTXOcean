@@ -774,7 +774,7 @@ static const CRPCCommand commands[] =
     { "marmara",       "marmarareceivelist",   &marmara_receivelist,      true },
     { "marmara",       "marmaradecodetxdata",   &marmara_decodetxdata,      true },
     { "marmara",       "marmaraaddressamountstat",   &marmara_addressamountstat,      true },
-    { "marmara",       "marmaraholderloop",   &marmara_holderloops,      true }
+    { "marmara",       "marmaraholderloops",   &marmara_holderloops,      true }
 };
 
 void RegisterMarmaraRPCCommands(CRPCTable &tableRPC)
