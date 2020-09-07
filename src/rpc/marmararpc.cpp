@@ -756,7 +756,7 @@ UniValue marmara_amountstat(const UniValue& params, bool fHelp, const CPubKey& r
             "\n");
     }
 
-    UniValue result = MarmaraAddressAmountStat();
+    UniValue result = MarmaraAmountStat();
     RETURN_IF_ERROR(CCerror);
     return result;
 }

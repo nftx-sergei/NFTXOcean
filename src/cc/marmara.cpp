@@ -6026,7 +6026,7 @@ static bool fixBadSettle(const uint256 &settletxid)
 
 
 // unspent amounts stat
-UniValue MarmaraAddressAmountStat()
+UniValue MarmaraAmountStat()
 {
     UniValue result(UniValue::VOBJ);
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
@@ -6082,11 +6082,11 @@ UniValue MarmaraAddressAmountStat()
         }
     }
 
-    result.push_back(Pair("TotalNormals", normals));
-    result.push_back(Pair("TotalPayToScriptHash", ppsh));
-    result.push_back(Pair("TotalActivated", activated));
-    result.push_back(Pair("TotalLockedInLoops", lcl));
-    result.push_back(Pair("TotalUnknownCC", ccunk));
+    result.push_back(Pair("TotalNormals", ValueFromAmount(normals)));
+    result.push_back(Pair("TotalPayToScriptHash", ValueFromAmount(ppsh)));
+    result.push_back(Pair("TotalActivated", ValueFromAmount(activated)));
+    result.push_back(Pair("TotalLockedInLoops", ValueFromAmount(lcl)));
+    result.push_back(Pair("TotalUnknownCC", ValueFromAmount(ccunk)));
 
     return result;
 }

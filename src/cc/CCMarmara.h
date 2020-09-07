@@ -179,7 +179,7 @@ bool MyGetCCopret(const CScript &scriptPubKey, CScript &opret);
 
 //int64_t AddMarmarainputs(bool(*CheckOpretFunc)(const CScript &, CPubKey &), CMutableTransaction &mtx, std::vector<CPubKey> &pubkeys, const char *unspentaddr, CAmount amount, int32_t maxinputs);
 UniValue MarmaraDecodeTxdata(const vuint8_t &txdata, bool printvins);
-UniValue MarmaraAddressAmountStat();
+UniValue MarmaraAmountStat();
 
 bool MarmaraValidate_h0(struct CCcontract_info *cp, Eval* eval, const CTransaction &tx, uint32_t nIn);
 int32_t MarmaraValidateStakeTx_h0(const char *destaddr, const CScript &vintxOpret, const CTransaction &staketx, int32_t height);
