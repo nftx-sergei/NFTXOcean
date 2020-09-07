@@ -5099,10 +5099,19 @@ UniValue MarmaraInfo(const CPubKey &refpk, int32_t firstheight, int32_t lastheig
         currency = (char *)MARMARA_CURRENCY;
     else
         currency = currencyparam;
-    if (firstheight <= lastheight)
-        firstheight = 0, lastheight = INT32_MAX;
-    if (minamount <= maxamount)
-        minamount = 0, maxamount = LLONG_MAX;
+    // not sure about logic of this, changed:
+    //if (firstheight <= lastheight)
+    //    firstheight = 0, lastheight = INT32_MAX;
+    //if (minamount <= maxamount)
+    //    minamount = 0, maxamount = LLONG_MAX;
+    if (lastheight == 0)    {
+        firstheight = 0;
+        lastheight = INT32_MAX;
+    }    
+    if (maxamount == 0) {
+        minamount = 0;
+        maxamount = LLONG_MAX;
+    }
     result.push_back(Pair("firstheight", static_cast<int64_t>(firstheight)));
     result.push_back(Pair("lastheight", static_cast<int64_t>(lastheight)));
     result.push_back(Pair("minamount", ValueFromAmount(minamount)));
@@ -5158,10 +5167,19 @@ UniValue MarmaraHolderLoops(const CPubKey &refpk, int32_t firstheight, int32_t l
         currency = MARMARA_CURRENCY;
     else
         currency = currencyparam;
-    if (firstheight <= lastheight)
-        firstheight = 0, lastheight = INT32_MAX;
-    if (minamount <= maxamount)
-        minamount = 0, maxamount = LLONG_MAX;
+    // not sure about logic of this, changed:
+    //if (firstheight <= lastheight)
+    //    firstheight = 0, lastheight = INT32_MAX;
+    //if (minamount <= maxamount)
+    //    minamount = 0, maxamount = LLONG_MAX;
+    if (lastheight == 0)    {
+        firstheight = 0;
+        lastheight = INT32_MAX;
+    }    
+    if (maxamount == 0) {
+        minamount = 0;
+        maxamount = LLONG_MAX;
+    }
     result.push_back(Pair("firstheight", static_cast<int64_t>(firstheight)));
     result.push_back(Pair("lastheight", static_cast<int64_t>(lastheight)));
     result.push_back(Pair("minamount", ValueFromAmount(minamount)));
