@@ -749,14 +749,17 @@ UniValue marmara_decodetxdata(const UniValue& params, bool fHelp, const CPubKey&
 UniValue marmara_amountstat(const UniValue& params, bool fHelp, const CPubKey& remotepk)
 {
     CCerror.clear();
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() != 2)
     {
-        throw runtime_error("marmaraamountstat\n"
-            "returns amounts\n"
+        throw runtime_error("marmaraamountstat begin_height end_height\n"
+            "returns marmara coin total amounts from begin_height to end_height. If begin_height 0 amounts are calculated from the first block, if end_height 0 amounts are calculated up to the latest block\n"
             "\n");
     }
 
-    UniValue result = MarmaraAmountStat();
+    int32_t begin_height = atol(params[0].get_str().c_str());
+    int32_t end_height = atol(params[1].get_str().c_str());
+
+    UniValue result = MarmaraAmountStat(begin_height, end_height);
     RETURN_IF_ERROR(CCerror);
     return result;
 }
