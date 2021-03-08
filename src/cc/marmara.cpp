@@ -6201,8 +6201,22 @@ UniValue MarmaraAmountStatDiff(int32_t beginHeight, int32_t endHeight)
             {
                 uint256 spenttxid;
                 int32_t spentvin, spentheight;
+                bool bSpent = false;
+                if (CCgetspenttxid(spenttxid, spentvin, spentheight, tx.GetHash(), ivout) == 0)
+                {
+                    CTransaction spenttx;
+                    uint256 hashBlock;
 
-                if (CCgetspenttxid(spenttxid, spentvin, spentheight, tx.GetHash(), ivout) != 0 || spentheight > endHeight)
+                    if (GetTransaction(spenttxid, spenttx, hashBlock))  {
+                        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+                        if (mi != mapBlockIndex.end() && (*mi).second) {
+                            CBlockIndex* pindex = (*mi).second;
+                            if (chainActive.Contains(pindex)) 
+                                bSpent = true;
+                        }
+                    }
+                }
+                if (!bSpent || spentheight > endHeight || spentheight == 0)
                     addTotals(tx, ivout, false);
             }
                 
