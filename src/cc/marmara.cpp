@@ -5657,23 +5657,23 @@ UniValue MarmaraPoSStat(int32_t beginHeight, int32_t endHeight)
     for(int32_t h = beginHeight; h <= endHeight; h ++) 
     {
         int8_t hsegid = komodo_segid(0, h);
+
+        CBlockIndex *pblockindex = chainActive[h];
+        CBlock block;
+
+        if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0) {
+            error.push_back(Pair("result", "error"));
+            error.push_back(Pair("error", std::string("Block not available (pruned data), h=") + std::to_string(h)));
+            return error;
+        }
+
+        if (!ReadBlockFromDisk(block, pblockindex, 1)) {
+            error.push_back(Pair("result", "error"));
+            error.push_back(Pair("error", std::string("Can't read block from disk, h=") + std::to_string(h)));
+            return error;
+        }
         if (hsegid >= 0)
         {
-            CBlockIndex *pblockindex = chainActive[h];
-            CBlock block;
-
-            if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0) {
-                error.push_back(Pair("result", "error"));
-                error.push_back(Pair("error", std::string("Block not available (pruned data), h=") + std::to_string(h)));
-                return error;
-            }
-
-            if (!ReadBlockFromDisk(block, pblockindex, 1)) {
-                error.push_back(Pair("result", "error"));
-                error.push_back(Pair("error", std::string("Can't read block from disk, h=") + std::to_string(h)));
-                return error;
-            }
-
             if (block.vtx.size() >= 2)
             {
                 CTransaction coinbase = block.vtx[0];
@@ -5681,23 +5681,8 @@ UniValue MarmaraPoSStat(int32_t beginHeight, int32_t endHeight)
                 uint256 hashBlock;
                 vscript_t vopret;
 
-                // check vin.size and vout.size, do not do this yet for diagnosis
-                // if (stakeTx.vin.size() == 1 && stakeTx.vout.size() == 1 || stakeTx.vout.size() == 2 && GetOpReturnData(stakeTx.vout.back().scriptPubKey, vopret) /*opret with merkle*/)
-                // {
-                //if (myGetTransaction(stakeTx.vin[0].prevout.hash, vintx, hashBlock))
-                //{
-                //char vintxaddr[KOMODO_ADDRESS_BUFSIZE];
                 char staketxaddr[KOMODO_ADDRESS_BUFSIZE];
-                //Getscriptaddress(vintxaddr, vintx.vout[0].scriptPubKey);
                 Getscriptaddress(staketxaddr, stakeTx.vout[0].scriptPubKey);
-
-                //if (strcmp(vintxaddr, staketxaddr) == 0)
-                //{
-               
-                // LOGSTREAMFN("marmara", CCLOG_DEBUG1, stream << "h=" << h << " stake txid=" << stakeTx.GetHash().GetHex() << " vout.size()=" << stakeTx.vout.size() << std::endl);
-
-                //char coinbaseaddr[KOMODO_ADDRESS_BUFSIZE];
-                //Getscriptaddress(coinbaseaddr, coinbase.vout[0].scriptPubKey);
 
                 std::string sStakeTxAddr = staketxaddr;
                 std::string staketxtype;
@@ -5749,13 +5734,16 @@ UniValue MarmaraPoSStat(int32_t beginHeight, int32_t endHeight)
                 mapStat[sStakeTxAddr + staketxtype] = std::make_tuple(sStakeTxAddr, staketxtype, segid, amount, std::get<POSSTAT_TXCOUNT>(elem) + 1);
 
                 LOGSTREAMFN("marmara", CCLOG_DEBUG1, stream << "h=" << h << " stake-txid=" << stakeTx.GetHash().GetHex() << " segid=" << segid << " address=" << staketxaddr << " type=" << staketxtype << " amount=" << stakeTx.vout[0].nValue << std::endl);
-
-                //}
-                //}
-                //}
             }
-            else
-                LOGSTREAMFN("marmara", CCLOG_ERROR, stream << "not a pos block" << " h=" << h << " hsegid=" << (int)hsegid<< std::endl);
+        }
+        else {
+            CTransaction coinbase = block.vtx[0];
+            char cbaddr[KOMODO_ADDRESS_BUFSIZE];
+            Getscriptaddress(cbaddr, coinbase.vout[0].scriptPubKey);
+            TStatElem elem = mapStat[std::string(cbaddr) + "pow"];
+
+            CAmount amount = std::get<POSSTAT_COINBASEAMOUNT>(elem) + coinbase.vout[0].nValue;
+            mapStat[std::string(cbaddr) + "pow"] = std::make_tuple(std::string(cbaddr), "pow", 0, amount, std::get<POSSTAT_TXCOUNT>(elem) + 1);    
         }
     }
 
@@ -5763,11 +5751,11 @@ UniValue MarmaraPoSStat(int32_t beginHeight, int32_t endHeight)
     {
         UniValue elem(UniValue::VOBJ);
 
-        elem.push_back(Pair("StakeTxAddress", std::get<POSSTAT_STAKETXADDR>(eStat.second)));
-        elem.push_back(Pair("StakeTxType", std::get<POSSTAT_STAKETXTYPE>(eStat.second)));
+        elem.push_back(Pair("CoinbaseAddress", std::get<POSSTAT_STAKETXADDR>(eStat.second)));
+        elem.push_back(Pair("BlockType", std::get<POSSTAT_STAKETXTYPE>(eStat.second)));
         elem.push_back(Pair("segid", (uint64_t)std::get<POSSTAT_SEGID>(eStat.second)));
         elem.push_back(Pair("CoinbaseAmount", std::get<POSSTAT_COINBASEAMOUNT>(eStat.second)));
-        elem.push_back(Pair("StakeTxCount", std::get<POSSTAT_TXCOUNT>(eStat.second)));
+        elem.push_back(Pair("TxCount", std::get<POSSTAT_TXCOUNT>(eStat.second)));
         array.push_back(elem);
     }
 
