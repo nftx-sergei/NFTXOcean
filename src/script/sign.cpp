@@ -226,6 +226,8 @@ CScript _CCPubKey(const CC *cond)
     return CScript() << std::vector<unsigned char>(buf, buf+len) << OP_CHECKCRYPTOCONDITION;
 }
 
+// note: this function is not used and probably not working as expected
+// signing cc inputs is done with cc_signTreeSecp256k1Msg32() in FinalizeCCTxExt()
 static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scriptPubKey, vector<valtype> &vSolutions,
                        vector<valtype>& ret, uint32_t consensusBranchId)
 {
@@ -246,7 +248,7 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
         if (_Getscriptaddress(addr, subScript) && GetCCByUnspendableAddress(&C, addr))
         {
             vPK.push_back(CPubKey(ParseHex(C.CChexstr)));
-            p = COptCCParams(p.VERSION, C.evalcode, 1, 1, vPK, vParams);
+            p = COptCCParams(p.VERSION_1, C.evalcode, 1, 1, vPK, vParams);
         }
     }
     else
@@ -685,3 +687,4 @@ bool DummySignatureCreator::CreateSig(
     vchSig[6 + 33 + 32] = SIGHASH_ALL;
     return true;
 }
+

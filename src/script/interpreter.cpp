@@ -1383,22 +1383,14 @@ int TransactionSignatureChecker::CheckCryptoCondition(
     } catch (logic_error ex) {
         return 0;
     }
-    /*int32_t z; uint8_t *ptr;
-    ptr = (uint8_t *)scriptCode.data();
-    for (z=0; z<scriptCode.size(); z++)
-        LogPrintf("%02x",ptr[z]);
-    LogPrintf(" <- CScript\n");
-    for (z=0; z<32; z++)
-        LogPrintf("%02x",((uint8_t *)&sighash)[z]);
-    LogPrintf(" sighash nIn.%d nHashType.%d %.8f id.%d\n",(int32_t)nIn,(int32_t)nHashType,(double)amount/COIN,(int32_t)consensusBranchId);
-     */
     VerifyEval eval = [] (CC *cond, void *checker) {
         //LogPrintf("checker.%p\n",(TransactionSignatureChecker*)checker);
         return ((TransactionSignatureChecker*)checker)->CheckEvalCondition(cond);
     };
+
     //LogPrintf("non-checker path\n");
-    int out = cc_verify(cond, (const unsigned char*)&sighash, 32, 0,
-                        condBin.data(), condBin.size(), eval, (void*)this);
+    int out = cc_verifyMaybeMixed(
+            cond, sighash, condBin.data(), condBin.size(), eval, (void*)this);
     //LogPrintf("out.%d from cc_verify\n",(int32_t)out);
     cc_free(cond);
     return out;
@@ -1407,7 +1399,7 @@ int TransactionSignatureChecker::CheckCryptoCondition(
 
 int TransactionSignatureChecker::CheckEvalCondition(const CC *cond) const
 {
-    //LogPrintf( "Cannot check crypto-condition Eval outside of server, returning true in pre-checks\n");
+    //LogPrintf("Cannot check crypto-condition Eval outside of server, returning true in pre-checks\n");
     return true;
 }
 
