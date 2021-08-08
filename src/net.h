@@ -311,7 +311,7 @@ public:
     int64_t nLastRecv;
     int64_t nTimeConnected;
     int64_t nTimeOffset;
-    uint32_t prevtimes[16];
+    uint32_t prevtimes[16],dexlastping;
     // Address of this peer
     CAddress addr;
     // Bind address of our side of the connection
