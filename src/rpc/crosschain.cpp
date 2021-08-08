@@ -39,15 +39,14 @@
 #include "key_io.h"
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
+#include "cc/CCtokens_impl.h"
 
 #include <stdint.h>
 #include <univalue.h>
 #include <regex>
 
-
 using namespace std;
 
-extern std::string CCerror;
 extern std::string ASSETCHAINS_SELFIMPORT;
 extern uint16_t ASSETCHAINS_CODAPORT, ASSETCHAINS_BEAMPORT;
 int32_t ensure_CCrequirements(uint8_t evalcode);
@@ -64,6 +63,8 @@ extern std::string ASSETCHAINS_SELFIMPORT;
 //std::string MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount, CMutableTransaction &mtx);
 //int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript &scriptPubKey, TxProof &proof, std::string rawsourcetx, int32_t &ivout, uint256 sourcetxid, uint64_t burnAmount);
 std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
+extern void Lock2NSPV(const CPubKey &pk);
+extern void Unlock2NSPV(const CPubKey &pk);
 
 UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -84,7 +85,7 @@ UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk
 UniValue crosschainproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     UniValue ret(UniValue::VOBJ);
-    //LogPrintf("crosschainproof needs to be implemented\n");
+    //fprintf(stderr,"crosschainproof needs to be implemented\n");
     return(ret);
 }
 
@@ -105,7 +106,7 @@ UniValue height_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
         height = chainActive.Tip()->GetHeight();
     }
-    //LogPrintf("height_MoM height.%d\n",height);
+    //fprintf(stderr,"height_MoM height.%d\n",height);
     depth = komodo_MoM(&notarized_height,&MoM,&kmdtxid,height,&MoMoM,&MoMoMoffset,&MoMoMdepth,&kmdstarti,&kmdendi);
     ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
     ret.push_back(Pair("height",height));
@@ -166,7 +167,7 @@ UniValue calc_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
     MoMdepth = atoi(params[1].get_str().c_str());
     if ( height <= 0 || MoMdepth <= 0 || MoMdepth >= height )
         throw runtime_error("calc_MoM illegal height or MoMdepth\n");
-    //LogPrintf("height_MoM height.%d\n",height);
+    //fprintf(stderr,"height_MoM height.%d\n",height);
     MoM = komodo_calcMoM(height,MoMdepth);
     ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
     ret.push_back(Pair("height",height));
@@ -286,7 +287,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
 
     CAmount burnAmount;
     if(params.size() == 3)
-        burnAmount = (CAmount)( atof(params[2].get_str().c_str()) * COIN + 0.00000000499999 );
+        burnAmount = AmountFromValue(params[2].get_str().c_str());
     else
         burnAmount = atoll(params[2].get_str().c_str());
 
@@ -299,7 +300,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
     if( params.size() == 4 )
         tokenid = Parseuint256(params[3].get_str().c_str());
         
-    if ( tokenid != zeroid && strcmp("LABS", targetSymbol.c_str()))
+    if (tokenid != zeroid && strcmp("LABS", targetSymbol.c_str()) == 0)
         throw JSONRPCError(RPC_TYPE_ERROR, "There is no tokens support on LABS.");
 
     CPubKey myPubKey = Mypubkey();
@@ -346,7 +347,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         vscript_t vopretBurnData;
         std::vector<uint8_t> vorigpubkey, vdestpubkey;
         std::string name, description;
-        std::vector<std::pair<uint8_t, vscript_t>>  oprets;
+        std::vector<vscript_t>  oprets;
 
         if (!myGetTransaction(tokenid, tokenbasetx, hashBlock))
             throw runtime_error("Could not load token creation tx\n");
@@ -355,16 +356,12 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         if (tokenbasetx.vout.size() == 0)
             throw runtime_error("No vouts in token tx\n");
 
-        if (DecodeTokenCreateOpRet(tokenbasetx.vout.back().scriptPubKey, vorigpubkey, name, description, oprets) != 'c')
+        if (DecodeTokenCreateOpRetV1(tokenbasetx.vout.back().scriptPubKey, vorigpubkey, name, description, oprets) != 'c')
             throw runtime_error("Incorrect token creation tx\n");
-        GetOpretBlob(oprets, OPRETID_NONFUNGIBLEDATA, vopretNonfungible);
+        GetOpReturnCCBlob(oprets, vopretNonfungible);
         /* allow fungible tokens:
         if (vopretNonfungible.empty())
             throw runtime_error("No non-fungible token data\n"); */
-
-        uint8_t destEvalCode = EVAL_TOKENS;
-        if (!vopretNonfungible.empty())
-            destEvalCode = vopretNonfungible.begin()[0];
 
         // check non-fungible tokens amount
         if (!vopretNonfungible.empty() && burnAmount != 1)
@@ -380,18 +377,18 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
             throw runtime_error("No normal input found for two txfee\n");
       
         int64_t ccInputs;
-        if ((ccInputs = AddTokenCCInputs(cpTokens, mtx, myPubKey, tokenid, burnAmount, 4)) < burnAmount)
+        if ((ccInputs = AddTokenCCInputs<TokensV1>(cpTokens, mtx, myPubKey, tokenid, burnAmount, 4, false)) < burnAmount)
             throw runtime_error("No token inputs found (please try to consolidate tokens)\n"); 
 
         // make payouts  (which will be in the import tx with token):
         mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS, txfee, GetUnspendable(cpTokens, NULL)));  // new marker to token cc addr, burnable and validated, vout position now changed to 0 (from 1)
-        mtx.vout.push_back(MakeTokensCC1vout(destEvalCode, burnAmount, destPubKey));
+        mtx.vout.push_back(MakeTokensCC1vout(EVAL_TOKENS, burnAmount, destPubKey));
 
-        std::vector<std::pair<uint8_t, vscript_t>> voprets;
+        std::vector<vscript_t> opretsnft;
         if (!vopretNonfungible.empty())
-            voprets.push_back(std::make_pair(OPRETID_NONFUNGIBLEDATA, vopretNonfungible));  // add additional opret with non-fungible data
+            opretsnft.push_back(vopretNonfungible);  // add additional opret with non-fungible data
 
-        mtx.vout.push_back(CTxOut((CAmount)0, EncodeTokenCreateOpRet('c', vorigpubkey, name, description, voprets)));  // make token import opret
+        mtx.vout.push_back(CTxOut((CAmount)0, EncodeTokenCreateOpRetV1(vorigpubkey, name, description, opretsnft)));  // make token import opret
         ret.push_back(Pair("payouts", HexStr(E_MARSHAL(ss << mtx.vout))));  // save payouts for import tx
 
         rawproof = E_MARSHAL(ss << chainSymbol << tokenbasetx); // add src chain name and token creation tx
@@ -400,7 +397,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         mtx.vout.clear();  // remove payouts
 
         // now make burn transaction:
-        mtx.vout.push_back(MakeTokensCC1vout(destEvalCode, burnAmount, pubkey2pk(ParseHex(CC_BURNPUBKEY))));    // burn tokens
+        mtx.vout.push_back(MakeTokensCC1vout(EVAL_TOKENS, burnAmount, pubkey2pk(ParseHex(CC_BURNPUBKEY))));    // burn tokens
                                                                                                                 
         int64_t change = inputs - txfee;
         if (change != 0)
@@ -411,10 +408,10 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
 
         int64_t ccChange = ccInputs - burnAmount;
         if (ccChange != 0)
-            mtx.vout.push_back(MakeTokensCC1vout(destEvalCode, ccChange, myPubKey));
+            mtx.vout.push_back(MakeTokensCC1vout(EVAL_TOKENS, ccChange, myPubKey));
 
         GetOpReturnData(burnOut.scriptPubKey, vopretBurnData);
-        mtx.vout.push_back(CTxOut(txfee, EncodeTokenOpRet(tokenid, voutTokenPubkeys, std::make_pair(OPRETID_BURNDATA, vopretBurnData))));  //burn txfee for miners in dest chain
+        mtx.vout.push_back(CTxOut(txfee, EncodeTokenOpRetV1(tokenid, voutTokenPubkeys, { vopretBurnData })));  //burn txfee for miners in dest chain
     }
 
     std::string burnTxHex = FinalizeCCTx(0, cpTokens, mtx, myPubKey, txfee, CScript()); //no change, no opret
@@ -452,10 +449,9 @@ void CheckBurnTxSource(uint256 burntxid, UniValue &info) {
             if (!E_UNMARSHAL(rawproof, ss >> sourceSymbol; ss >> tokenbasetxStored))
                 throw std::runtime_error("Cannot unmarshal rawproof for tokens");
 
-            uint8_t evalCode;
             std::vector<CPubKey> voutPubkeys;
-            std::vector<std::pair<uint8_t, vscript_t>> oprets;
-            if( DecodeTokenOpRet(burnTx.vout.back().scriptPubKey, evalCode, tokenid, voutPubkeys, oprets) == 0 )
+            std::vector<vscript_t> oprets;
+            if( DecodeTokenOpRetV1(burnTx.vout.back().scriptPubKey, tokenid, voutPubkeys, oprets) == 0 )
                 throw std::runtime_error("Cannot decode token opret in burn tx");
 
             if( tokenid != tokenbasetxStored.GetHash() )
@@ -471,11 +467,11 @@ void CheckBurnTxSource(uint256 burntxid, UniValue &info) {
             if (tokenbasetx.vout.size() > 0) {
                 std::vector<uint8_t> origpubkey;
                 std::string name, description;
-                std::vector<std::pair<uint8_t, vscript_t>>  oprets;
+                std::vector<vscript_t>  oprets;
 
                 vscript_t vopretNonfungible;
-                if (DecodeTokenCreateOpRet(tokenbasetx.vout.back().scriptPubKey, origpubkey, name, description, oprets) == 'c') {
-                    GetOpretBlob(oprets, OPRETID_NONFUNGIBLEDATA, vopretNonfungible);
+                if (DecodeTokenCreateOpRetV1(tokenbasetx.vout.back().scriptPubKey, origpubkey, name, description, oprets) == 'c') {
+                    GetOpReturnCCBlob(oprets, vopretNonfungible);
                     if (vopretNonfungible.empty())
                         throw std::runtime_error("Could not migrate fungible tokens");
                 }
@@ -488,8 +484,9 @@ void CheckBurnTxSource(uint256 burntxid, UniValue &info) {
 
             struct CCcontract_info *cpTokens, CCtokens_info;
             cpTokens = CCinit(&CCtokens_info, EVAL_TOKENS);
-            int64_t ccInputs = 0, ccOutputs = 0;
-            if( !TokensExactAmounts(true, cpTokens, ccInputs, ccOutputs, NULL, burnTx, tokenid) )
+            //int64_t ccInputs = 0, ccOutputs = 0;
+            std::string errorStr;
+            if( !TokensExactAmounts<TokensV1>(true, cpTokens, NULL, burnTx, errorStr) )
                 throw std::runtime_error("Incorrect token burn tx: cc inputs <> cc outputs");
         }
         else if (vopret.begin()[0] == EVAL_IMPORTCOIN) {
@@ -732,7 +729,7 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
                             "\ncreates self import coin transaction");
 
     destaddr = params[0].get_str();
-    burnAmount = atof(params[1].get_str().c_str()) * COIN + 0.00000000499999;
+    burnAmount = AmountFromValue(params[1]);
 
     source = ASSETCHAINS_SELFIMPORT;   //defaults to -ac_import=... param
 
@@ -865,13 +862,13 @@ UniValue importgatewaybind(const UniValue& params, bool fHelp, const CPubKey& my
 {
     UniValue result(UniValue::VOBJ);
     CMutableTransaction mtx; std::vector<unsigned char> pubkey;
-    std::string hex,coin; int32_t i,M,N; std::vector<CPubKey> pubkeys;
+    std::string coin; int32_t i,M,N; std::vector<CPubKey> pubkeys;
     uint256 oracletxid; uint8_t p1,p2,p3,p4;
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("importgatewaybind only works on -ac_import chains");
-    if ( fHelp || params.size() != 8) 
-        throw runtime_error("use \'importgatewaybind coin orcletxid M N pubkeys pubtype p2shtype wiftype [taddr]\' to bind an import gateway\n");
+    if ( fHelp || params.size() < 8) 
+        throw runtime_error("importgatewaybind coin orcletxid M N pubkeys pubtype p2shtype wiftype [taddr]\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     CCerror = "";
@@ -904,13 +901,13 @@ UniValue importgatewaybind(const UniValue& params, bool fHelp, const CPubKey& my
         ERR_RESULT("source coin not equal to ac_import name");
         return result;
     }
-    hex = ImportGatewayBind(0, coin, oracletxid, M, N, pubkeys, p1, p2, p3, p4);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
+    Lock2NSPV(mypk);
+    result = ImportGatewayBind(mypk,0, coin, oracletxid, M, N, pubkeys, p1, p2, p3, p4);
+    if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex", hex));
-    } else ERR_RESULT("couldnt importgatewaybind");
+    }
+    Unlock2NSPV(mypk);
     return result;
 }
 
@@ -918,13 +915,13 @@ UniValue importgatewaydeposit(const UniValue& params, bool fHelp, const CPubKey&
 {
     UniValue result(UniValue::VOBJ);
     CMutableTransaction mtx; std::vector<uint8_t> rawproof;
-    std::string hex,coin,rawburntx; int32_t height,burnvout; int64_t amount;
+    std::string coin,rawburntx; int32_t height,burnvout; uint64_t amount;
     CPubKey destpub; std::vector<CTxOut> vouts; uint256 bindtxid,burntxid;
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("importgatewaydeposit only works on -ac_import chains");
     if ( fHelp || params.size() != 9) 
-        throw runtime_error("use \'importgatewaydeposit bindtxid height coin burntxid nvout rawburntx rawproof destpub amount\' to import deposited coins\n");
+        throw runtime_error("importgatewaydeposit bindtxid height coin cointxid markervout rawhex rawproof destpubkey amount\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     CCerror = "";
@@ -947,13 +944,13 @@ UniValue importgatewaydeposit(const UniValue& params, bool fHelp, const CPubKey&
         ERR_RESULT("source coin not equal to ac_import name");
         return result;
     }
-    hex = ImportGatewayDeposit(0, bindtxid, height, coin, burntxid, burnvout, rawburntx, rawproof, destpub, amount);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
+    Lock2NSPV(mypk);
+    result = ImportGatewayDeposit(mypk,0, bindtxid, height, coin, burntxid, burnvout, rawburntx, rawproof, destpub, amount);
+    if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex", hex));
-    } else ERR_RESULT("couldnt importgatewaydeposit");
+    }
+    Unlock2NSPV(mypk);
     return result;
 }
 
@@ -961,13 +958,13 @@ UniValue importgatewaywithdraw(const UniValue& params, bool fHelp, const CPubKey
 {
     UniValue result(UniValue::VOBJ);
     CMutableTransaction mtx; std::vector<uint8_t> rawproof;
-    std::string hex,coin,rawburntx; int64_t amount; int32_t height,burnvout;
+    std::string coin,rawburntx; int64_t amount; int32_t height,burnvout;
     CPubKey destpub; std::vector<CTxOut> vouts; uint256 bindtxid,burntxid;
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("importgatewaywithdraw only works on -ac_import chains");
     if ( fHelp || params.size() != 4) 
-        throw runtime_error("use \'importgatewaywithdraw bindtxid coin withdrawpub amount\' to burn imported coins and withdraw them on external chain\n");
+        throw runtime_error("importgatewaywithdraw bindtxid coin withdrawpubkey amount\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     CCerror = "";
@@ -985,103 +982,80 @@ UniValue importgatewaywithdraw(const UniValue& params, bool fHelp, const CPubKey
         ERR_RESULT("source coin not equal to ac_import name");
         return result;
     }
-    hex = ImportGatewayWithdraw(0, bindtxid, coin, destpub, amount);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
+    Lock2NSPV(mypk);
+    result = ImportGatewayWithdraw(mypk,0, bindtxid, coin, destpub, amount);
+    if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex", hex));
-    } else ERR_RESULT("couldnt importgatewaywithdraw");
+    }
+    Unlock2NSPV(mypk);
     return result;
 }
 
-UniValue importgatewaypartialsign(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue importgatewaywithdrawsign(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    UniValue result(UniValue::VOBJ); std::string coin,parthex,hex; uint256 txid;
+    UniValue result(UniValue::VOBJ); uint256 lasttxid; std::string txhex,coin;
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
-        throw runtime_error("importgatewayspartialsign only works on -ac_import chains");
+        throw runtime_error("importgatewaywithdrawsign only works on -ac_import chains");
     if ( fHelp || params.size() != 3 )
-        throw runtime_error("importgatewayspartialsign txidaddr refcoin hex\n");
+        throw runtime_error("importgatewaywithdrawsign lasttxid coin hex\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    txid = Parseuint256((char *)params[0].get_str().c_str());
-    coin = params[1].get_str();
-    parthex = params[2].get_str();
-    hex = ImportGatewayPartialSign(0,txid,coin,parthex);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
-    {
-        result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex",hex));
-    } else ERR_RESULT("couldnt importgatewayspartialsign");
-    return(result);
-}
-
-UniValue importgatewaycompletesigning(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 withdrawtxid; std::string txhex,hex,coin;
-
-    if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
-        throw runtime_error("importgatewaycompletesigning only works on -ac_import chains");
-    if ( fHelp || params.size() != 3 )
-        throw runtime_error("importgatewaycompletesigning withdrawtxid coin hex\n");
-    if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    withdrawtxid = Parseuint256((char *)params[0].get_str().c_str());
+    lasttxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     txhex = params[2].get_str();
-    hex = ImportGatewayCompleteSigning(0,withdrawtxid,coin,txhex);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
+    Lock2NSPV(mypk);
+    result = ImportGatewayWithdrawSign(mypk,0,lasttxid,coin,txhex);
+    if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex", hex));
-    } else ERR_RESULT("couldnt importgatewaycompletesigning");
+    }
+    Unlock2NSPV(mypk);
     return(result);
 }
 
 UniValue importgatewaymarkdone(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    UniValue result(UniValue::VOBJ); uint256 completetxid; std::string hex,coin;
+    UniValue result(UniValue::VOBJ); uint256 withdrawsigntxid; std::string coin;
     if ( fHelp || params.size() != 2 )
-        throw runtime_error("importgatewaymarkdone completesigningtx coin\n");
+        throw runtime_error("importgatewaymarkdone withdrawsigntxid coin\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    completetxid = Parseuint256((char *)params[0].get_str().c_str());
+    withdrawsigntxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
-    hex = ImportGatewayMarkDone(0,completetxid,coin);
-    RETURN_IF_ERROR(CCerror);
-    if ( hex.size() > 0 )
+    Lock2NSPV(mypk);
+    result = ImportGatewayMarkDone(mypk,0,withdrawsigntxid,coin);
+    if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
-        result.push_back(Pair("hex", hex));
-    } else ERR_RESULT("couldnt importgatewaymarkdone");
+    }
+    Unlock2NSPV(mypk);
     return(result);
 }
 
-UniValue importgatewaypendingwithdraws(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue importgatewaypendingsignwithdraws(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     uint256 bindtxid; std::string coin;
     if ( fHelp || params.size() != 2 )
-        throw runtime_error("importgatewaypendingwithdraws bindtxid coin\n");
+        throw runtime_error("importgatewaypendingsignwithdraws bindtxid coin\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     bindtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
-    return(ImportGatewayPendingWithdraws(bindtxid,coin));
+    return(ImportGatewayPendingSignWithdraws(mypk,bindtxid,coin));
 }
 
-UniValue importgatewayprocessed(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue importgatewaysignedwithdraws(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     uint256 bindtxid; std::string coin;
     if ( fHelp || params.size() != 2 )
-        throw runtime_error("importgatewayprocessed bindtxid coin\n");
+        throw runtime_error("importgatewaysignedwithdraws bindtxid coin\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     bindtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
-    return(ImportGatewayProcessedWithdraws(bindtxid,coin));
+    return(ImportGatewaySignedWithdraws(mypk,bindtxid,coin));
 }
 
 UniValue importgatewayexternaladdress(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -1116,9 +1090,9 @@ UniValue importgatewaydumpprivkey(const UniValue& params, bool fHelp, const CPub
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
     }
     CKey vchSecret;
-    // if (!pwalletMain->GetKey(*keyID, vchSecret)) {
-    //     throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
-    //}
+    if (!pwalletMain->GetKey(*keyID, vchSecret)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
+    }
     return(ImportGatewayDumpPrivKey(bindtxid,vchSecret));
 }
 
@@ -1418,34 +1392,27 @@ UniValue getwalletburntransactions(const UniValue& params, bool fHelp, const CPu
 
                 if (vopret.begin()[0] == EVAL_TOKENS) {
                     // get burned token value
-                    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
+                    std::vector<vscript_t>  oprets;
                     uint256 tokenid;
-                    uint8_t evalCodeInOpret;
                     std::vector<CPubKey> voutTokenPubkeys;
 
                     //skip token opret:
-                    if (DecodeTokenOpRet(pwtx->vout.back().scriptPubKey, evalCodeInOpret, tokenid, voutTokenPubkeys, oprets) != 0) {
+                    if (DecodeTokenOpRetV1(pwtx->vout.back().scriptPubKey, tokenid, voutTokenPubkeys, oprets) != 0) {
                         CTransaction tokenbasetx;
                         uint256 hashBlock;
 
                         if (myGetTransaction(tokenid, tokenbasetx, hashBlock)) {
                             std::vector<uint8_t> vorigpubkey;
                             std::string name, description;
-                            std::vector<std::pair<uint8_t, vscript_t>>  oprets;
+                            std::vector<vscript_t>  oprets;
 
                             if (tokenbasetx.vout.size() > 0 &&
-                                DecodeTokenCreateOpRet(tokenbasetx.vout.back().scriptPubKey, vorigpubkey, name, description, oprets) == 'c')
+                                DecodeTokenCreateOpRetV1(tokenbasetx.vout.back().scriptPubKey, vorigpubkey, name, description, oprets) == 'c')
                             {
-                                uint8_t destEvalCode = EVAL_TOKENS; // init set to fungible token:
-                                vscript_t vopretNonfungible;
-                                GetOpretBlob(oprets, OPRETID_NONFUNGIBLEDATA, vopretNonfungible);
-                                if (!vopretNonfungible.empty())
-                                    destEvalCode = vopretNonfungible.begin()[0];
-
                                 int64_t burnAmount = 0;
                                 for (auto v : pwtx->vout)
                                     if (v.scriptPubKey.IsPayToCryptoCondition() &&
-                                        CTxOut(v.nValue, v.scriptPubKey) == MakeTokensCC1vout(destEvalCode ? destEvalCode : EVAL_TOKENS, v.nValue, pubkey2pk(ParseHex(CC_BURNPUBKEY))))  // burned to dead pubkey
+                                        CTxOut(v.nValue, v.scriptPubKey) == MakeTokensCC1vout(EVAL_TOKENS, v.nValue, pubkey2pk(ParseHex(CC_BURNPUBKEY))))  // burned to dead pubkey
                                         burnAmount += v.nValue;
 
                                 entry.push_back(Pair("burnedAmount", ValueFromAmount(burnAmount)));
@@ -1468,7 +1435,7 @@ UniValue getwalletburntransactions(const UniValue& params, bool fHelp, const CPu
                     entry.push_back(Pair("inMempool", "yes"));
                 ret.push_back(entry);
             }
-        } //else LogPrintf("null pwtx\n
+        } //else fprintf(stderr,"null pwtx\n
         if ((int)ret.size() >= (nCount))
             break;
     }
