@@ -274,10 +274,11 @@ libbitcoin_server_a_SOURCES = \
   cc/eval.cpp \
   cc/import.cpp \
   cc/importgateway.cpp \
-  cc/CCassetsCore.cpp \
+  cc/CCassetsUtils.cpp \
   cc/CCcustom.cpp \
   cc/CCtx.cpp \
   cc/CCutils.cpp \
+  cc/CCvalidation.cpp \
   cc/CCtokens.cpp \
   cc/assets.cpp \
   cc/faucet.cpp \
@@ -289,12 +290,14 @@ libbitcoin_server_a_SOURCES = \
   cc/oracles.cpp \
   cc/prices.cpp \
   cc/pegs.cpp \
-  cc/marmara.cpp \
   cc/payments.cpp \
   cc/gateways.cpp \
   cc/channels.cpp \
   cc/auction.cpp \
   cc/betprotocol.cpp \
+  cc/pricesfeed.cpp \
+  cc/priceslibs/cjsonpointer.cpp \
+  cc/CCTokelData.cpp \
   chain.cpp \
   checkpoints.cpp \
   fs.cpp \
@@ -329,6 +332,9 @@ libbitcoin_server_a_SOURCES = \
   rpc/net.cpp \
   rpc/rawtransaction.cpp \
   rpc/server.cpp \
+  rpc/tokensrpc.cpp \
+  rpc/pricesrpc.cpp \
+  rpc/ccutilsrpc.cpp \
   script/serverchecker.cpp \
   script/sigcache.cpp \
   timedata.cpp \
@@ -369,8 +375,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/rpcdisclosure.cpp \
   wallet/rpcdump.cpp \
   cc/CCtokens.cpp \
-  cc/CCassetsCore.cpp \
-  cc/CCassetstx.cpp \
+  cc/CCassetsUtils.cpp \
   cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
   wallet/wallet.cpp \
@@ -494,6 +499,7 @@ libbitcoin_common_a_SOURCES = \
   transaction_builder.cpp \
   cc/CCtokenutils.cpp \
   cc/CCutilbits.cpp \
+  gmp_i64.c \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
