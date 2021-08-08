@@ -98,7 +98,6 @@ CBlockIndex *komodo_getblockindex(uint256 hash);
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
-std::string CCerror;
 
 // Private method:
 UniValue z_getoperationstatus_IMPL(const UniValue&, bool);

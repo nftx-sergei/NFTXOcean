@@ -771,6 +771,9 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
     uiInterface.ShowProgress("", 100, false);
     LogPrintf("[%s].\n", ShutdownRequested() ? "CANCELLED" : "DONE");
 
+    return true;
+}
+
 // update or erase entry for unspent cc index
 bool CBlockTreeDB::UpdateUnspentCCIndex(const std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue > >&vect) {
     CDBBatch batch(*this);
@@ -786,7 +789,8 @@ bool CBlockTreeDB::UpdateUnspentCCIndex(const std::vector<std::pair<CUnspentCCIn
 
 // read unspent cc index by address or address+creationid key
 bool CBlockTreeDB::ReadUnspentCCIndex(uint160 addressHash, uint256 creationid,
-                                           std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue> > &unspentOutputs, int32_t beginHeight, int32_t endHeight, int64_t maxOutputs) {
+                                           std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue> > &unspentOutputs, int32_t beginHeight, int32_t endHeight, int64_t maxOutputs) 
+{
 
     boost::scoped_ptr<CDBIterator> pcursor(NewIterator());
 
@@ -825,5 +829,4 @@ bool CBlockTreeDB::ReadUnspentCCIndex(uint160 addressHash, uint256 creationid,
             break;
         }
     }
-    return true;
 }
