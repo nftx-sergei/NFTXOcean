@@ -358,7 +358,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
     // Track number of attempts to find a table entry, before giving up to avoid infinite loop
     const int kMaxRetries = 200000;         // magic number so unit tests can pass
     const int kRetriesBetweenSleep = 1000;
-    const int kRetrySleepInterval = 100;    // milliseconds
+    const int kRetrySleepInterval = 0;      // replaced 100 milliseconds to 0 to prevent long addrman lock
 
     if (newOnly && nNew == 0)
         return CAddrInfo();
