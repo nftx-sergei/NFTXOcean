@@ -892,6 +892,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (setProcDEPPol != NULL) setProcDEPPol(PROCESS_DEP_ENABLE);
 #endif
 
+    addrman.Init(); // call clear addr table
+
     if (!SetupNetworking())
         return InitError("Error: Initializing networking failed");
 
@@ -1374,7 +1376,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if ( KOMODO_NSPV_FULLNODE )
     {
-		uiInterface.InitMessage(_("Loading Sapling parameters..."));
+        uiInterface.InitMessage(_("Loading Sapling parameters..."));
         // Initialize Zcash circuit parameters
         ZC_LoadParams(chainparams);
     }
@@ -1606,9 +1608,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if ( fReindex == 0 )
     {
-        bool checkval,fAddressIndex,fSpentIndex;
+        bool checkval, fAddressIndex, fSpentIndex, fUnspentCCIndexTmp;
         pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
         fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
+        checkval = false;  // need to reinit checkval otherwise it might be undefined if ReadFlag returns false
         pblocktree->ReadFlag("addressindex", checkval);
         if ( checkval != fAddressIndex && fAddressIndex != 0 )
         {
@@ -1617,11 +1620,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             fReindex = true;
         }
         fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
+        checkval = false;  
         pblocktree->ReadFlag("spentindex", checkval);
         if ( checkval != fSpentIndex && fSpentIndex != 0 )
         {
             pblocktree->WriteFlag("spentindex", fSpentIndex);
             LogPrintf("set spentindex, will reindex. could take a while.\n");
+            fReindex = true;
+        }
+
+        fUnspentCCIndexTmp = GetBoolArg("-unspentccindex", false);
+        checkval = false;  
+        pblocktree->ReadFlag("unspentccindex", checkval);
+        if ( checkval != fUnspentCCIndexTmp && fUnspentCCIndexTmp != 0 )
+        {
+            pblocktree->WriteFlag("unspentccindex", fUnspentCCIndexTmp);
+            fprintf(stderr,"set unspentccindex, will reindex. could take a while.\n");
             fReindex = true;
         }
     }
@@ -2060,6 +2074,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // SENDALERT
     threadGroup.create_thread(boost::bind(ThreadSendAlert));
+
+    if (KOMODO_NSPV_FULLNODE)
+        LogPrintf("nLocalServices %llx %d, %d\n", (long long)nLocalServices, GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX), GetBoolArg("-spentindex", DEFAULT_SPENTINDEX));
 
     return !fRequestShutdown;
 }
