@@ -17,6 +17,8 @@
 #ifndef KOMODO_NSPVSUPERLITE_H
 #define KOMODO_NSPVSUPERLITE_H
 
+#include "komodo_DEX.h"
+
 // nSPV client. VERY simplistic "single threaded" networking model. for production GUI best to multithread, etc.
 // no caching, no optimizations, no reducing the number of ntzsproofs needed by detecting overlaps, etc.
 // advantage is that it is simpler to implement and understand to create a design for a more performant version
@@ -361,7 +363,7 @@ UniValue NSPV_getinfo_json(struct NSPV_inforesp *ptr)
 {
     UniValue result(UniValue::VOBJ); int32_t expiration; uint32_t timestamp = (uint32_t)time(NULL);
     result.push_back(Pair("result","success"));
-    result.push_back(Pair("nSPV",KOMODO_NSPV==-1?"disabled":(KOMODO_NSPV_SUPERLITE?"superlite":"fullnode")));
+    result.push_back(Pair("nSPV", (nLocalServices & NODE_NSPV) ? "disabled" : (KOMODO_NSPV_SUPERLITE ? "superlite" : "fullnode" )));   
     if ( NSPV_address.size() != 0 )
     {
         result.push_back(Pair("address",NSPV_address));
