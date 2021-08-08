@@ -114,6 +114,8 @@ bool fCoinbaseEnforcedProtectionEnabled = true;
 size_t nCoinCacheUsage = 5000 * 300;
 uint64_t nPruneTarget = 0;
 bool fAlerts = DEFAULT_ALERTS;
+bool fUnspentCCIndex = false;
+
 /* If the tip is older than this (in seconds), the node is considered to be in initial block download.
  */
 int64_t nMaxTipAge = DEFAULT_MAX_TIP_AGE;
@@ -925,7 +927,7 @@ bool IsStandardTx(const CTransaction& tx, string& reason, const int nHeight)
         else if ((whichType == TX_MULTISIG) && (!fIsBareMultisigStd)) {
             reason = "bare-multisig";
             return false;
-        } else if (whichType != TX_CRYPTOCONDITION && txout.IsDust(::minRelayTxFee)) {
+        } else if (whichType != TX_CRYPTOCONDITION /*!IsCryptoConditionsEnabled()*/ && txout.IsDust(::minRelayTxFee)) {  // allow dust for cc chains
             reason = "dust";
             return false;
         }
@@ -1161,10 +1163,6 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
             }
         }
         return(false);
-    }
-    else if ( ASSETCHAINS_MARMARA != 0 && nHeight > 0 && (nHeight & 1) == 0 )
-    {
-        
     }
     else if ( slowflag != 0 && ASSETCHAINS_CBOPRET != 0 && validateprices != 0 && nHeight > 0 && tx.vout.size() > 0 )
     {
@@ -1808,9 +1806,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     uint32_t tiptime;
     int flag=0,nextBlockHeight = chainActive.Height() + 1;
     auto consensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
+
     if ( nextBlockHeight <= 1 || chainActive.LastTip() == 0 )
         tiptime = (uint32_t)time(NULL);
-    else tiptime = (uint32_t)chainActive.LastTip()->nTime;
+    else 
+        tiptime = (uint32_t)chainActive.LastTip()->nTime;
 //LogPrintf("addmempool 0\n");
     // Node operator can choose to reject tx by number of transparent inputs
     static_assert(std::numeric_limits<size_t>::max() >= std::numeric_limits<int64_t>::max(), "size_t too small");
@@ -1822,7 +1822,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         size_t n = tx.vin.size();
         if (n > limit) {
             LogPrint("mempool", "Dropping txid %s : too many transparent inputs %zu > limit %zu\n", tx.GetHash().ToString(), n, limit );
-            return false;
+            return state.Error("AcceptToMemoryPool: too many inputs");
         }
     }
 //LogPrintf("addmempool 1\n");
@@ -1830,20 +1830,21 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     if ( ASSETCHAINS_SYMBOL[0] == 0 && komodo_validate_interest(tx,chainActive.LastTip()->GetHeight()+1,chainActive.LastTip()->GetMedianTimePast() + 777,0) < 0 )
     {
         LogPrintf("AcceptToMemoryPool komodo_validate_interest failure\n");
-        return error("AcceptToMemoryPool: komodo_validate_interest failed");
+        return state.Error("AcceptToMemoryPool: komodo_validate_interest failed");
     }
     
     if (!CheckTransaction(tiptime,tx, state, verifier, 0, 0))
     {
-        return error("AcceptToMemoryPool: CheckTransaction failed");
+        return error("AcceptToMemoryPool: CheckTransaction failed");  // state must be already set
     }
     
     // DoS level set to 10 to be more forgiving.
     // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
     if (!ContextualCheckTransaction(0,0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
     {
-        return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
+        return error("AcceptToMemoryPool: ContextualCheckTransaction failed"); // state must be already set
     }
+    //LogPrintf("addmempool 2\n");
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
     {
@@ -1855,7 +1856,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     string reason;
     if (Params().RequireStandard() && !IsStandardTx(tx, reason, nextBlockHeight))
     {
-        //
         //LogPrintf("AcceptToMemoryPool reject nonstandard transaction: %s\nscriptPubKey: %s\n",reason.c_str(),tx.vout[0].scriptPubKey.ToString().c_str());
         return state.DoS(0,error("AcceptToMemoryPool: nonstandard transaction: %s", reason),REJECT_NONSTANDARD, reason);
     }
@@ -1938,7 +1938,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                     {
                         if (pfMissingInputs)
                             *pfMissingInputs = true;
-                        //LogPrintf("missing inputs\n");
+                        LogPrintf("%s missing inputs for tx %s prevout.hash=%s\n", __func__, tx.GetHash().GetHex().c_str(), txin.prevout.hash.GetHex().c_str());  //TODO: remove
                         return false; 
                         /*
                             https://github.com/zcash/zcash/blob/master/src/main.cpp#L1490
@@ -1972,7 +1972,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         }
         // Check for non-standard pay-to-script-hash in inputs
         if (Params().RequireStandard() && !AreInputsStandard(tx, view, consensusBranchId))
-            return error("AcceptToMemoryPool: reject nonstandard transaction input");
+            return state.Error("AcceptToMemoryPool: reject nonstandard transaction input");
         
         // Check that the transaction doesn't have an excessive number of
         // sigops, making it impossible to mine. Since the coinbase transaction
@@ -1983,7 +1983,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         nSigOps += GetP2SHSigOpCount(tx, view);
         if (nSigOps > MAX_STANDARD_TX_SIGOPS)
         {
-            LogPrintf("accept failure.4\n");
+            //LogPrintf("accept failure.4\n");
             return state.DoS(1, error("AcceptToMemoryPool: too many sigops %s, %d > %d", hash.ToString(), nSigOps, MAX_STANDARD_TX_SIGOPS),REJECT_NONSTANDARD, "bad-txns-too-many-sigops");
         }
         
@@ -2029,7 +2029,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         
         // Require that free transactions have sufficient priority to be mined in the next block.
         if (GetBoolArg("-relaypriority", false) && nFees < ::minRelayTxFee.GetFee(nSize) && !AllowFree(view.GetPriority(tx, chainActive.Height() + 1))) {
-            LogPrintf("accept failure.6\n");
+            //LogPrintf("accept failure.6\n");
             return state.DoS(0, false, REJECT_INSUFFICIENTFEE, "insufficient priority");
         }
         
@@ -2074,7 +2074,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         PrecomputedTransactionData txdata(tx);
-        if (!ContextualCheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
+        std::shared_ptr<CCheckCCEvalCodes> evalcodeChecker(new CCheckCCEvalCodes());
+        if (!ContextualCheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId, evalcodeChecker))
         {
             //LogPrintf("accept failure.9\n");
             return error("AcceptToMemoryPool: ConnectInputs failed %s", hash.ToString());
@@ -2097,12 +2098,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         }
 //LogPrintf("addmempool 7\n");
 
-        if (!ContextualCheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
+        if (!ContextualCheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId, evalcodeChecker))
         {
             if ( flag != 0 )
                 KOMODO_CONNECTING = -1;
             return error("AcceptToMemoryPool: BUG! PLEASE REPORT THIS! ConnectInputs failed against MANDATORY but not STANDARD flags %s", hash.ToString());
         }
+
+        if (!ContextualCheckOutputs(tx, state, true, txdata, evalcodeChecker))
+            return error("AcceptToMemoryPool: BUG! PLEASE REPORT THIS! ContextualCheckOutputs failed %s", hash.ToString());;
         if ( flag != 0 )
             KOMODO_CONNECTING = -1;
 
@@ -2120,6 +2124,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                 // Add memory spent index
                 if (fSpentIndex) {
                     pool.addSpentIndex(entry, view);
+                }
+
+                if (fUnspentCCIndex) {
+                    pool.addUnspentCCIndex(entry, view);  // add mempool unspent cc index for cc vin/vouts
                 }
             }
         }
@@ -2188,6 +2196,18 @@ bool GetAddressUnspent(uint160 addressHash, int type,
     return true;
 }
 
+bool GetUnspentCCIndex(uint160 addressHash, uint256 creationId,
+                       std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue> > &unspentOutputs, int32_t beginHeight, int32_t endHeight, int64_t maxOutputs)
+{
+    if (!fUnspentCCIndex)
+        return error("unspent cc index not enabled");
+
+    if (!pblocktree->ReadUnspentCCIndex(addressHash, creationId, unspentOutputs, beginHeight, endHeight, maxOutputs))
+        return error("unable to get outputs for address from unspent cc index");
+
+    return true;
+}
+
 struct CompareBlocksByHeightMain
 {
     bool operator()(const CBlockIndex* a, const CBlockIndex* b) const
@@ -2214,7 +2234,7 @@ struct CompareBlocksByHeightMain
     else return(coins.vout[n].nValue);
 }*/
 
-bool myAddtomempool(CTransaction &tx, CValidationState *pstate, bool fSkipExpiry)
+bool myAddtomempool(const CTransaction &tx, CValidationState *pstate, bool fSkipExpiry)
 {
     CValidationState state;
     if (!pstate)
@@ -2280,7 +2300,7 @@ bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlo
             return true;
         }
     }
-    //fprintf(stderr,"not found on disk %s\n",hash.GetHex().c_str());
+    //LogPrintf("not found on disk %s\n",hash.GetHex().c_str());
     return false;
 }
 
@@ -2773,11 +2793,19 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight)
     UpdateCoins(tx, inputs, txundo, nHeight);
 }
 
-bool CScriptCheck::operator()() {
-    const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
-    ServerTransactionSignatureChecker checker(ptxTo, nIn, amount, cacheStore, *txdata);
+bool CScriptCheck::operator()()
+{
+    if (vout != 0) {
+        ServerTransactionSignatureChecker checker(ptxTo, n, amount, cacheStore, evalcodeChecker, *txdata);
+        if (checker.CheckCryptoCondition(scriptPubKey.GetCCV2SPK(), &error) != 1) {
+            return ::error("CScriptCheck(): %s:%d CC validation failed: %s", ptxTo->GetHash().ToString(), n, ScriptErrorString(error));
+        }
+    } else {
+        const CScript& scriptSig = ptxTo->vin[n].scriptSig;
+        ServerTransactionSignatureChecker checker(ptxTo, n, amount, cacheStore, evalcodeChecker, *txdata);
     if (!VerifyScript(scriptSig, scriptPubKey, nFlags, checker, consensusBranchId, &error)) {
-        return ::error("CScriptCheck(): %s:%d VerifySignature failed: %s", ptxTo->GetHash().ToString(), nIn, ScriptErrorString(error));
+            return ::error("CScriptCheck(): %s:%d VerifySignature failed: %s", ptxTo->GetHash().ToString(), n, ScriptErrorString(error));
+        }
     }
     return true;
 }
@@ -2796,7 +2824,6 @@ namespace Consensus {
         // for an attacker to attempt to split the network.
         if (!inputs.HaveInputs(tx))
             return state.Invalid(error("CheckInputs(): %s inputs unavailable", tx.GetHash().ToString()));
-
         // are the JoinSplit's requirements met?
         if (!inputs.HaveJoinSplitRequirements(tx))
             return state.Invalid(error("CheckInputs(): %s JoinSplit requirements not met", tx.GetHash().ToString()));
@@ -2901,6 +2928,7 @@ bool ContextualCheckInputs(
                            PrecomputedTransactionData& txdata,
                            const Consensus::Params& consensusParams,
                            uint32_t consensusBranchId,
+                           std::shared_ptr<CCheckCCEvalCodes> evalcodeChecker,
                            std::vector<CScriptCheck> *pvChecks)
 {
     if (!tx.IsMint())
@@ -2927,7 +2955,7 @@ bool ContextualCheckInputs(
                 assert(coins);
 
                 // Verify signature
-                CScriptCheck check(*coins, tx, i, flags, cacheStore, consensusBranchId, &txdata);
+                CScriptCheck check(*coins, tx, i, flags, cacheStore, consensusBranchId, evalcodeChecker, &txdata);
                 if (pvChecks) {
                     pvChecks->push_back(CScriptCheck());
                     check.swap(pvChecks->back());
@@ -2940,7 +2968,7 @@ bool ContextualCheckInputs(
                         // avoid splitting the network between upgraded and
                         // non-upgraded nodes.
                         CScriptCheck check2(*coins, tx, i,
-                                            flags & ~STANDARD_NOT_MANDATORY_VERIFY_FLAGS, cacheStore, consensusBranchId, &txdata);
+                                            flags & ~STANDARD_NOT_MANDATORY_VERIFY_FLAGS, cacheStore, consensusBranchId, evalcodeChecker, &txdata);
                         if (check2())
                             return state.Invalid(false, REJECT_NONSTANDARD, strprintf("non-mandatory-script-verify-flag (%s)", ScriptErrorString(check.GetScriptError())));
                     }
@@ -2960,10 +2988,43 @@ bool ContextualCheckInputs(
     if (tx.IsCoinImport() || tx.IsPegsImport())
     {
         LOCK(cs_main);
-        ServerTransactionSignatureChecker checker(&tx, 0, 0, false, txdata);
+        ServerTransactionSignatureChecker checker(&tx, 0, 0, false, NULL,txdata);
         return VerifyCoinImport(tx.vin[0].scriptSig, checker, state);
     }
 
+    return true;
+}
+
+bool ContextualCheckOutputs(
+                           const CTransaction& tx,
+                           CValidationState &state,
+                           bool fScriptChecks,
+                           PrecomputedTransactionData& txdata,
+                           std::shared_ptr<CCheckCCEvalCodes> evalcodeChecker,
+                           std::vector<CScriptCheck> *pvChecks)
+{
+    if (pvChecks)
+        pvChecks->reserve(tx.vout.size());
+
+    if (fScriptChecks) 
+    {
+        for (unsigned int i = 0; i < tx.vout.size(); i++) 
+        {
+            if (tx.vout[i].scriptPubKey.IsPayToCCV2() )
+            {
+                CScriptCheck check(tx.vout[i].scriptPubKey, tx.vout[i].nValue, tx, i, evalcodeChecker, &txdata);
+                if (pvChecks)
+                {
+                    pvChecks->push_back(CScriptCheck());
+                    check.swap(pvChecks->back());
+                }
+                else if (!check())
+                {
+                    return state.DoS(100,false, REJECT_INVALID, strprintf("mandatory-script-verify-flag-failed (%s)", ScriptErrorString(check.GetScriptError())));
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -3193,13 +3254,14 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
     std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > addressUnspentIndex;
     std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> > spentIndex;
+    std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue> > unspentCCIndex; // index for cc transactions
 
     // undo transactions in reverse order
     for (int i = block.vtx.size() - 1; i >= 0; i--) {
         const CTransaction &tx = block.vtx[i];
         uint256 hash = tx.GetHash();
-        if (fAddressIndex) {
-
+        if (fAddressIndex || fUnspentCCIndex) 
+        {
             for (unsigned int k = tx.vout.size(); k-- > 0;) {
                 const CTxOut &out = tx.vout[k];
 
@@ -3209,11 +3271,36 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                 int keyType = GetAddressType(out.scriptPubKey, vDest, txType, vSols);
                 if ( keyType != 0 )
                 {
+                    if (fAddressIndex)  {
                     for (auto addr : vSols)
                     {
                         uint160 addrHash = addr.size() == 20 ? uint160(addr) : Hash160(addr);
                         addressIndex.push_back(make_pair(CAddressIndexKey(keyType, addrHash, pindex->GetHeight(), i, hash, k, false), out.nValue));
                         addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(keyType, addrHash, hash, k), CAddressUnspentValue()));
+                    }
+                }
+                    if (fUnspentCCIndex) 
+                    {
+                        if (keyType == 3)   // CC type
+                        {
+                            if (vSols.size() > 0)   
+                            {                                 
+                                uint160 addrHash = vSols[0].size() == 20 ? uint160(vSols[0]) : Hash160(vSols[0]); // use first vSol data as the address                                    
+                                uint256 creationId;
+                                uint8_t evalcode, funcid, version;
+                                CScript opreturn; //init as empty
+                                if (tx.vout.back().scriptPubKey.size() > 0 && tx.vout.back().scriptPubKey[0] == OP_RETURN)
+                                    opreturn = tx.vout.back().scriptPubKey;
+
+                                if (CCDecodeTxVout(tx, k, evalcode, funcid, version, creationId))  {
+                                    // set key for delete the current entry from unspent cc index
+                                    unspentCCIndex.push_back(make_pair(
+                                        CUnspentCCIndexKey(addrHash, creationId, hash, k), 
+                                        CUnspentCCIndexValue()));
+                                    //std::cerr << __func__ << " undoing cc tx=" << hash.GetHex() << " nvout=" << k << " evalcode=" << (int)evalcode << " creationId=" << creationId.GetHex() << " opreturn.size()=" << opreturn.size() << std::endl; 
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3261,7 +3348,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                     spentIndex.push_back(make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue()));
                 }
 
-                if (fAddressIndex) {
+                if (fAddressIndex || fUnspentCCIndex) {
                     const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
 
                     vector<vector<unsigned char>> vSols;
@@ -3270,14 +3357,42 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                     int keyType = GetAddressType(prevout.scriptPubKey, vDest, txType, vSols);
                     if ( keyType != 0 )
                     {
+                        if (fAddressIndex)
+                    {
                         for (auto addr : vSols)
                         {
                             uint160 addrHash = addr.size() == 20 ? uint160(addr) : Hash160(addr);
                             // undo spending activity
                             addressIndex.push_back(make_pair(CAddressIndexKey(keyType, addrHash, pindex->GetHeight(), i, hash, j, true), prevout.nValue * -1));
-
                             // restore unspent index
                             addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(keyType, addrHash, input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight)));
+                            }
+                        }
+                        if (fUnspentCCIndex) // support cc index for cc chains
+                        {
+                            if (keyType == 3)  // type CC
+                            {
+                                if (vSols.size() > 0)   
+                                {                                    
+                                    uint160 addrHash = vSols[0].size() == 20 ? uint160(vSols[0]) : Hash160(vSols[0]); // use first vSol data as the address
+                                    CTransaction vintx;
+                                    uint256 hashBlock;
+                                    
+                                    if (myGetTransaction(input.prevout.hash, vintx, hashBlock) && vintx.vout.size() > 0) {  // load previous tx to get opreturn
+                                        uint256 creationId;
+                                        uint8_t evalcode, funcid, version;
+                                        CScript prevOpreturn; //init as empty
+                                        if (vintx.vout.back().scriptPubKey.size() > 0 && vintx.vout.back().scriptPubKey[0] == OP_RETURN)
+                                            prevOpreturn = vintx.vout.back().scriptPubKey;
+
+                                        // restore prev entry:
+                                        if (CCDecodeTxVout(vintx, input.prevout.n, evalcode, funcid, version, creationId))
+                                            unspentCCIndex.push_back(make_pair(
+                                                CUnspentCCIndexKey(addrHash, creationId, input.prevout.hash, input.prevout.n), 
+                                                CUnspentCCIndexValue(prevout.nValue, prevout.scriptPubKey, prevOpreturn, undo.nHeight, evalcode, funcid, version)));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3317,6 +3432,12 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
         }
         if (!pblocktree->UpdateAddressUnspentIndex(addressUnspentIndex)) {
             return AbortNode(state, "Failed to write address unspent index");
+        }
+    }
+
+    if (fUnspentCCIndex) {
+        if (!pblocktree->UpdateUnspentCCIndex(unspentCCIndex)) {
+            return AbortNode(state, "Failed to write unspent cc index");
         }
     }
 
@@ -3514,7 +3635,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         setDirtyFileInfo.insert(blockPos.nFile);
         //LogPrintf("added ht.%d copy of tmpfile to %d.%d\n",pindex->GetHeight(),blockPos.nFile,blockPos.nPos);
     }
-
     // verify that the view's current state corresponds to the previous block
     uint256 hashPrevBlock = pindex->pprev == NULL ? uint256() : pindex->pprev->GetBlockHash();
     if ( hashPrevBlock != view.GetBestBlock() )
@@ -3570,6 +3690,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
     }
     CCheckQueueControl<CScriptCheck> control(fExpensiveChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
+    std::shared_ptr<CCheckCCEvalCodes> evalcodeChecker(new CCheckCCEvalCodes());
 
     int64_t nTimeStart = GetTimeMicros();
     CAmount nFees = 0;
@@ -3581,9 +3702,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     std::vector<std::pair<uint256, CDiskTxPos> > vPos;
     vPos.reserve(block.vtx.size());
     blockundo.vtxundo.reserve(block.vtx.size() - 1);
+
     std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > addressUnspentIndex;
     std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> > spentIndex;
+    std::vector<std::pair<CUnspentCCIndexKey, CUnspentCCIndexValue> > unspentCCIndex; // index for cc transactions
+
     // Construct the incremental merkle tree at the current
     // block position,
     auto old_sprout_tree_root = view.GetBestAnchor(SPROUT);
@@ -3634,7 +3758,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (!view.HaveJoinSplitRequirements(tx))
                 return state.DoS(100, error("ConnectBlock(): JoinSplit requirements not met"),
                                  REJECT_INVALID, "bad-txns-joinsplit-requirements-not-met");
-            if (fAddressIndex || fSpentIndex)
+
+            if (fAddressIndex || fSpentIndex || fUnspentCCIndex)
             {
                 for (size_t j = 0; j < tx.vin.size(); j++) 
                 {
@@ -3647,6 +3772,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     txnouttype txType = TX_PUBKEYHASH;
                     uint160 addrHash;
                     int keyType = GetAddressType(prevout.scriptPubKey, vDest, txType, vSols);
+                    if (fAddressIndex || fSpentIndex)
+                    {
                     if ( keyType != 0 )
                     {
                         for (auto addr : vSols)
@@ -3663,6 +3790,37 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                             // add the spent index to determine the txid and input that spent an output
                             // and to find the amount and address from an input
                             spentIndex.push_back(make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue(txhash, j, pindex->GetHeight(), prevout.nValue, keyType, addrHash)));
+                        }
+                    }
+                }
+                    if (fUnspentCCIndex) 
+                    {
+                        // erase spent cc entry
+                        if (keyType == 3)   
+                        {
+                            if (vSols.size() > 0)   
+                            {            
+                                CTransaction vintx;
+                                uint256 hashBlock;
+
+                                if (myGetTransaction(input.prevout.hash, vintx, hashBlock) && vintx.vout.size() > 0)
+                                {                     
+                                    uint160 addrHash = vSols[0].size() == 20 ? uint160(vSols[0]) : Hash160(vSols[0]); // use first vSol data as the address                                    
+                                    uint256 creationId;
+                                    uint8_t evalcode, funcid, version;
+                                    CScript opreturn; //init as empty
+                                    if (vintx.vout.back().scriptPubKey.size() > 0 && vintx.vout.back().scriptPubKey[0] == OP_RETURN)
+                                        opreturn = tx.vout.back().scriptPubKey;
+
+                                    if (CCDecodeTxVout(vintx, input.prevout.n, evalcode, funcid, version, creationId))  {
+                                        // set key for delete the spent output
+                                        unspentCCIndex.push_back(make_pair(
+                                            CUnspentCCIndexKey(addrHash, creationId, input.prevout.hash, input.prevout.n), 
+                                            CUnspentCCIndexValue()));
+                                        //std::cerr << __func__ << " erasing spent cc output evalcode=" << (int)evalcode << " Hash160(vSols[0])=" << Hash160(vSols[0]).GetHex() << " creationId=" << creationId.GetHex() << " opreturn.size()=" << opreturn.size() << std::endl; 
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3701,12 +3859,19 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             //LogPrintf( "tx.%s nFees.%li interest.%li\n", tx.GetHash().ToString().c_str(), stakeTxValue, interest);
 
             std::vector<CScriptCheck> vChecks;
-            if (!ContextualCheckInputs(tx, state, view, fExpensiveChecks, flags, false, txdata[i], chainparams.GetConsensus(), consensusBranchId, nScriptCheckThreads ? &vChecks : NULL))
+            if (!ContextualCheckInputs(tx, state, view, fExpensiveChecks, flags, false, txdata[i], chainparams.GetConsensus(), consensusBranchId, evalcodeChecker, nScriptCheckThreads ? &vChecks : NULL))
+                return false;
+        }
+
+        {   // check tx outputs including coinbases
+            std::vector<CScriptCheck> vChecks;
+            if (!ContextualCheckOutputs(tx, state, fExpensiveChecks, txdata[i], evalcodeChecker, nScriptCheckThreads ? &vChecks : NULL))
                 return false;
             control.Add(vChecks);
         }
 
-        if (fAddressIndex) {
+        if (fAddressIndex || fUnspentCCIndex) // update address index, unspent index and cc index
+        {
             for (unsigned int k = 0; k < tx.vout.size(); k++) {
                 const CTxOut &out = tx.vout[k];
 
@@ -3718,6 +3883,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 int keyType = GetAddressType(out.scriptPubKey, vDest, txType, vSols);
                 if ( keyType != 0 )
                 {
+                    if (fAddressIndex)
+                {
                     for (auto addr : vSols)
                     {
                         addrHash = addr.size() == 20 ? uint160(addr) : Hash160(addr);
@@ -3726,6 +3893,30 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
                         // record unspent output
                         addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(keyType, addrHash, txhash, k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->GetHeight())));
+                    }
+                }
+                    if (fUnspentCCIndex) // support cc index for cc chains
+                    {
+                        if (keyType == 3)  // type CC
+                        {
+                            if (vSols.size() > 0)   
+                            {                                 
+                                uint160 addrHash = vSols[0].size() == 20 ? uint160(vSols[0]) : Hash160(vSols[0]); // use first vSol data as the address                                    
+                                uint256 creationId;
+                                uint8_t evalcode, funcid, version;
+                                CScript opreturn; //init as empty
+                                if (tx.vout.back().scriptPubKey.size() > 0 && tx.vout.back().scriptPubKey[0] == OP_RETURN)
+                                    opreturn = tx.vout.back().scriptPubKey;
+
+                                if (CCDecodeTxVout(tx, k, evalcode, funcid, version, creationId))  {
+                                    // record cc index output with spk and opreturn
+                                    unspentCCIndex.push_back(make_pair(
+                                        CUnspentCCIndexKey(addrHash, creationId, txhash, k), 
+                                        CUnspentCCIndexValue(tx.vout[k].nValue, tx.vout[k].scriptPubKey, opreturn, pindex->GetHeight(), evalcode, funcid, version)));
+                                    //std::cerr << __func__ << " adding to cc index tx=" << txhash.GetHex() << " nvout=" << k << " evalcode=" << (int)evalcode << " creationId=" << creationId.GetHex() << " opreturn.size()=" << opreturn.size() << std::endl; 
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3830,7 +4021,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 LogPrintf("ConnectBlock: unexpected null pprev\n");
             if (!UndoWriteToDisk(blockundo, pos, pindex->pprev->GetBlockHash(), chainparams.MessageStart()))
                 return AbortNode(state, "Failed to write undo data");
-
             // update nUndoPos in block index
             pindex->nUndoPos = pos.nPos;
             pindex->nStatus |= BLOCK_HAVE_UNDO;
@@ -3863,6 +4053,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         if (!pblocktree->UpdateAddressUnspentIndex(addressUnspentIndex)) {
             return AbortNode(state, "Failed to write address unspent index");
+        }
+    }
+
+    if (fUnspentCCIndex)    {
+        if (!pblocktree->UpdateUnspentCCIndex(unspentCCIndex)) {
+            return AbortNode(state, "Failed to write address unspent cc index");
         }
     }
 
@@ -4265,6 +4461,83 @@ static int64_t nTimeFlush = 0;
 static int64_t nTimeChainState = 0;
 static int64_t nTimePostConnect = 0;
 
+
+// class to save mempool state and auto restore it (in destructor)
+// this is used for assets chains where we need to restore mempool state to make mempool clean up from the txns of a validated block 
+// if the block was failed to connect 
+class CMempoolStateSaver 
+{
+public: 
+    CMempoolStateSaver(const std::string & _caller) : isAssetChain(false), preventRestore(false), caller(_caller) {} 
+    void Save(bool _isAssetChain) 
+    {
+        isAssetChain = _isAssetChain;
+        if (isAssetChain)
+        {
+            LOCK2(cs_main, mempool.cs);
+            // remember all non-z txids currently in mempool
+            for (auto const & e : mempool.mapTx) {
+                const CTransaction &tx = e.GetTx();
+                const uint256 &hash = tx.GetHash();
+                if (tx.vjoinsplit.empty() && tx.vShieldedSpend.empty()) 
+                    mempoolState[hash] = true;
+            }
+        }
+    }
+
+    // prevent from restore from mempool state if the block was valid and connected okay
+    void PreventRestore() 
+    {
+        if (isAssetChain)   {
+            mempoolState.clear();
+            preventRestore = true;
+        }
+    } 
+
+private:
+    void _RestoreState()
+    {
+        if (isAssetChain)
+        {
+            if (!preventRestore)
+            {
+                LOCK2(cs_main, mempool.cs);
+
+                // remove txns that have been added in CheckBlock() for the connected block
+                std::list<CTransaction> txnsToRemove;
+                for (auto const & e : mempool.mapTx) {
+                    const CTransaction &tx = e.GetTx();
+                    uint256 hash = tx.GetHash();
+                    if (tx.vjoinsplit.empty() && tx.vShieldedSpend.empty()) {
+                        if (!mempoolState[hash])  
+                            txnsToRemove.push_back(tx); //   
+                    }                
+                }
+
+                // do actual remove
+                for (auto const & tx : txnsToRemove) {
+                    list<CTransaction> removed;
+                    mempool.remove(tx, removed, false);
+                    // std::cerr << __func__ << " mempool.removed=" << tx.GetHash().GetHex() << " " << removed.size() << std::endl;
+                }
+            }
+        }
+    }
+public:
+    // auto restore the saved mempool state
+    ~CMempoolStateSaver()
+    {
+        _RestoreState();
+    }
+
+private:
+    bool isAssetChain;
+    bool preventRestore;
+    std::map<uint256, bool> mempoolState;
+    std::string caller;
+};
+
+
 /**
  * Connect a new block to chainActive. pblock is either NULL or a pointer to a CBlock
  * corresponding to pindexNew, to bypass loading it again from disk.
@@ -4297,6 +4570,12 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     LogPrint("bench", "  - Load block from disk: %.2fms [%.2fs]\n", (nTime2 - nTime1) * 0.001, nTimeReadFromDisk * 0.000001);
     {
         CCoinsViewCache view(pcoinsTip);
+
+        // save mempool state, for asset chains:
+        CMempoolStateSaver mempoolState(__func__);
+        mempoolState.Save(ASSETCHAINS_CC != 0);  
+        // The mempool will be restored to the initial state when mempoolState exits its scope (if any errors)
+
         bool rv = ConnectBlock(*pblock, state, pindexNew, view, false, true);
         KOMODO_CONNECTING = -1;
         GetMainSignals().BlockChecked(*pblock, state);
@@ -4473,6 +4752,7 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
     {
         LogPrintf("pindexOldTip->GetHeight().%d > notarizedht %d && pindexFork->GetHeight().%d is < notarizedht %d, so ignore it\n",(int32_t)pindexOldTip->GetHeight(),notarizedht,(int32_t)pindexFork->GetHeight(),notarizedht);
         // *** DEBUG ***
+        if (1)
         {
             const CBlockIndex *pindexLastNotarized = mapBlockIndex[notarizedhash];
             auto msg = "- " + strprintf(_("Current tip : %s, height %d, work %s"),
@@ -5207,7 +5487,6 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         if ( ASSETCHAINS_STAKED == 0 && komodo_checkPOW(0,1,(CBlock *)&block,height) < 0 ) // checks Equihash
             return state.DoS(100, error("CheckBlock: failed slow_checkPOW"),REJECT_INVALID, "failed-slow_checkPOW");
     }
-
     if ( height > nDecemberHardforkHeight && ASSETCHAINS_SYMBOL[0] == 0 ) // December 2019 hardfork
     {
         int32_t notaryid;
@@ -5270,10 +5549,13 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         int32_t i,j,rejects=0,lastrejects=0;
         //LogPrintf("put block's tx into mempool\n");
         // Copy all non Z-txs in mempool to temporary mempool because there can be tx in local mempool that make the block invalid.
-        LOCK2(cs_main,mempool.cs);
+        // LOCK2(cs_main,mempool.cs);
+        ENTER_CRITICAL_SECTION(cs_main);
+        ENTER_CRITICAL_SECTION(mempool.cs);
+
         //LogPrintf( "starting... mempoolsize.%ld\n",mempool.size());
         list<CTransaction> transactionsToRemove;
-        BOOST_FOREACH(const CTxMemPoolEntry& e, mempool.mapTx) {
+        for(const CTxMemPoolEntry& e : mempool.mapTx) {
             const CTransaction &tx = e.GetTx();
             const uint256 &hash = tx.GetHash();
             if ( tx.vjoinsplit.empty() && tx.vShieldedSpend.empty()) {
@@ -5281,16 +5563,17 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
                 tmpmempool.addUnchecked(hash,e,true);
             }
         }
-        BOOST_FOREACH(const CTransaction& tx, transactionsToRemove) {
+        for(const CTransaction& tx : transactionsToRemove) {
             list<CTransaction> removed;
             mempool.remove(tx, removed, false);
+            // std::cerr << __func__ << " removed to tmpmempool tx=" << tx.GetHash().GetHex() << std::endl;
         }
         // add all the txs in the block to the empty mempool.
         // CC validation shouldnt (cant) depend on the state of mempool!
-        while ( 1 )
+        while( true )
         {
             list<CTransaction> removed;
-            for (i=0; i<block.vtx.size(); i++)
+            for (int32_t i = 0; i < block.vtx.size(); i ++)
             {
                 CValidationState state; CTransaction Tx; 
                 const CTransaction &tx = (CTransaction)block.vtx[i];
@@ -5307,7 +5590,13 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
                         sTx = Tx;
                         ptx = &sTx;
                     } else rejects++;
+                    // std::cerr << __func__ << " myAddtomempool for block tx=" << tx.GetHash().GetHex() << " false" << std::endl;
                 }
+                else
+                {
+                    // std::cerr << __func__ << " myAddtomempool for block tx=" << tx.GetHash().GetHex() << " true" << std::endl;
+                }
+                
                 // here we remove any txs in the temp mempool that were included in the block.
                 tmpmempool.remove(tx, removed, false);
             }
@@ -5336,8 +5625,9 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         if (!CheckTransaction(tiptime,tx, state, verifier, i, (int32_t)block.vtx.size()))
             return error("CheckBlock: CheckTransaction failed");
     }
+
     unsigned int nSigOps = 0;
-    BOOST_FOREACH(const CTransaction& tx, block.vtx)
+    for(const CTransaction& tx : block.vtx)
     {
         nSigOps += GetLegacySigOpCount(tx);
     }
@@ -5360,9 +5650,9 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
 
     if ( ASSETCHAINS_CC != 0 )
     {
-        LOCK2(cs_main,mempool.cs);
+        // LOCK2(cs_main, mempool.cs);
         // here we add back all txs from the temp mempool to the main mempool.
-        BOOST_FOREACH(const CTxMemPoolEntry& e, tmpmempool.mapTx)
+        for(const CTxMemPoolEntry& e : tmpmempool.mapTx)
         {
             const CTransaction &tx = e.GetTx();
             const uint256 &hash = tx.GetHash();
@@ -5371,6 +5661,43 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         //LogPrintf( "finished adding back. mempoolsize.%ld\n",mempool.size());
         // empty the temp mempool for next time.
         tmpmempool.clear();
+        mempool.check(pcoinsTip);   // update coins cache for txns in mempool
+
+        CCoinsView dummy;
+        CCoinsViewCache view(&dummy);
+        CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
+        view.SetBackend(viewMemPool);
+
+        // update mempool indexes:
+        for(const CTxMemPoolEntry& e : mempool.mapTx)
+        {
+            const CTransaction &tx = e.GetTx();
+            if (!tx.IsCoinImport() && !fImporting && !fReindex)
+            {
+                if (view.HaveInputs(tx))   // also adds vin txns to CoinViewCache
+                {
+                    // Add memory address index
+                    if (fAddressIndex) {
+                        mempool.addAddressIndex(e, view);
+                    }
+
+                    // Add memory spent index
+                    if (fSpentIndex) {
+                        mempool.addSpentIndex(e, view);
+                    }
+
+                    if (fUnspentCCIndex) {
+                        mempool.addUnspentCCIndex(e, view);  // add mempool unspent cc index for cc vin/vouts
+                    }
+                }
+                else
+                {
+                    // std::cerr << __func__ << " view.HaveInputs(tx) failed for txid=" << tx.GetHash().GetHex() << std::endl;
+                }
+            }
+        }
+        LEAVE_CRITICAL_SECTION(mempool.cs);
+        LEAVE_CRITICAL_SECTION(cs_main);
     }
     return true;
 }
@@ -5827,6 +6154,12 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
     //LogPrintf("ProcessBlock %d\n",(int32_t)chainActive.LastTip()->GetHeight());
     {
         LOCK(cs_main);
+
+        // save mempool state and clear it, for asset chains:
+        CMempoolStateSaver mempoolState(__func__);
+        mempoolState.Save(ASSETCHAINS_CC != 0);  // The mempool will be restored to the initial state when mempoolState exits its scope
+        // this mempol state should be restored after the exist of this block as there is no block connect done yet 
+
         if ( chainActive.LastTip() != 0 )
             komodo_currentheight_set(chainActive.LastTip()->GetHeight());
         checked = CheckBlock(&futureblock,height!=0?height:komodo_block2height(pblock),0,*pblock, state, verifier,0);
@@ -5886,6 +6219,11 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
     indexDummy.SetHeight(pindexPrev->GetHeight() + 1);
     // JoinSplit proofs are verified in ConnectBlock
     auto verifier = libzcash::ProofVerifier::Disabled();
+
+    // save mempool state and clear it, for asset chains:
+    CMempoolStateSaver mempoolState(__func__);
+    mempoolState.Save(ASSETCHAINS_CC != 0); // the mempool state will be restored when mempoolState exits its scope
+
     // NOTE: CheckBlockHeader is called by CheckBlock
     if (!ContextualCheckBlockHeader(block, state, pindexPrev))
     {
@@ -5966,7 +6304,6 @@ bool PruneOneBlockFile(bool tempfile, const int fileNumber)
             pindex->nDataPos = 0;
             pindex->nUndoPos = 0;
             setDirtyBlockIndex.insert(pindex);
-
             // Prune from mapBlocksUnlinked -- any block we prune would have
             // to be downloaded again in order to consider its chain, at which
             // point it would be considered as a candidate for
@@ -6291,6 +6628,9 @@ bool static LoadBlockIndexDB()
     // Check whether we have a spent index
     pblocktree->ReadFlag("spentindex", fSpentIndex);
     LogPrintf("%s: spent index %s\n", __func__, fSpentIndex ? "enabled" : "disabled");
+
+    pblocktree->ReadFlag("unspentccindex", fUnspentCCIndex);
+    LogPrintf("%s: unspent cc index %s\n", __func__, fUnspentCCIndex ? "enabled" : "disabled");
 
     // Fill in-memory data
     BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
@@ -6657,7 +6997,12 @@ bool InitBlockIndex() {
         
         fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
         pblocktree->WriteFlag("spentindex", fSpentIndex);
-        fprintf(stderr,"fAddressIndex.%d/%d fSpentIndex.%d/%d\n",fAddressIndex,DEFAULT_ADDRESSINDEX,fSpentIndex,DEFAULT_SPENTINDEX);
+        LogPrintf("fAddressIndex.%d/%d fSpentIndex.%d/%d\n",fAddressIndex,DEFAULT_ADDRESSINDEX,fSpentIndex,DEFAULT_SPENTINDEX);
+
+        fUnspentCCIndex = GetBoolArg("-unspentccindex", false);
+        pblocktree->WriteFlag("unspentccindex", fUnspentCCIndex);
+        LogPrintf( "fUnspentCCIndex.%d\n", fUnspentCCIndex);
+
         LogPrintf("Initializing databases...\n");
     }
     // Only add the genesis block if not reindexing (in which case we reuse the one already on disk)
@@ -6740,7 +7085,6 @@ bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp)
                 blkdat >> block;
                 
                 nRewind = blkdat.GetPos();
-
                 // detect out of order blocks, and store them for later
                 uint256 hash = block.GetHash();
                 if (hash != chainparams.GetConsensus().hashGenesisBlock && mapBlockIndex.find(block.hashPrevBlock) == mapBlockIndex.end()) {
@@ -6773,6 +7117,7 @@ bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp)
                     std::pair<std::multimap<uint256, CDiskBlockPos>::iterator, std::multimap<uint256, CDiskBlockPos>::iterator> range = mapBlocksUnknownParent.equal_range(head);
                     while (range.first != range.second) {
                         std::multimap<uint256, CDiskBlockPos>::iterator it = range.first;
+                        
                         if (ReadBlockFromDisk(mapBlockIndex.count(hash)!=0?mapBlockIndex[hash]->GetHeight():0,block, it->second,1))
                         {
                             LogPrintf("%s: Processing out of order child %s of %s\n", __func__, block.GetHash().ToString(),
@@ -7411,7 +7756,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if ( strCommand == "events" )
     {
-        int32_t i;
         if ( ASSETCHAINS_CCLIB != "gamescc" )
         {
             Misbehaving(pfrom->GetId(), 1);
@@ -7430,7 +7774,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if ( (pfrom->nServices & NODE_NSPV) == 0 )
             {
-                // fprintf(stderr,"invalid nServices.%llx nSPV peer.%d\n",(long long)pfrom->nServices,pfrom->id);
+                // LogPrintf("invalid nServices.%llx nSPV peer.%d\n",(long long)pfrom->nServices,pfrom->id);
                 pfrom->fDisconnect = true;
                 return false;
             }
@@ -7449,7 +7793,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (pfrom->nVersion < chainparams.GetConsensus().vUpgrades[
         CurrentEpoch(GetHeight(), chainparams.GetConsensus())].nProtocolVersion)
     {
-        LogPrintf("peer=%d using obsolete version %i; disconnecting\n", pfrom->id, pfrom->nVersion);
+        LogPrintf("peer=%d using obsolete version %i vs %d; disconnecting\n", pfrom->id, pfrom->nVersion,(int32_t)chainparams.GetConsensus().vUpgrades[
+                                                                                                                                                       CurrentEpoch(GetHeight(), chainparams.GetConsensus())].nProtocolVersion);
         pfrom->PushMessage("reject", strCommand, REJECT_OBSOLETE,
                             strprintf("Version must be %d or greater",
                             chainparams.GetConsensus().vUpgrades[
