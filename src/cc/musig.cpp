@@ -383,7 +383,7 @@ UniValue musig_combine(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
         ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
     if ( params != 0 && (n= cJSON_GetArraySize(params)) > 0 )
     {
-        //LogPrintf("n.%d args.(%s)\n",n,jprint(params,0));
+        //fprintf(stderr,"n.%d args.(%s)\n",n,jprint(params,0));
         for (i=0; i<n; i++)
         {
             if ( musig_parsepubkey(ctx,spk,jitem(params,i)) < 0 )
@@ -426,7 +426,7 @@ UniValue musig_session(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
             musiglocation = juint(jitem(params,5),0);
         else if ( n == 5 )
             musiglocation = 0;
-        //LogPrintf("number of params.%i musiglocation.%i\n",n,musiglocation);
+        //printf("number of params.%i musiglocation.%i\n",n,musiglocation);
         if ( MUSIG.size() > musiglocation )
         {
             for (int i = 0; i < MUSIG.size()-1; i++)
@@ -469,7 +469,7 @@ UniValue musig_session(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
              *           my_index: index of this signer in the signers array
              *             seckey: the signer's 32-byte secret key (cannot be NULL)
              */
-        //LogPrintf( "SESSION: struct_size.%li using struct %i\n",MUSIG.size(), musiglocation);
+        //fprintf(stderr, "SESSION: struct_size.%li using struct %i\n",MUSIG.size(), musiglocation);
         if ( secp256k1_musig_session_initialize(ctx,&MUSIG[musiglocation]->session,MUSIG[musiglocation]->signer_data, &MUSIG[musiglocation]->nonce_commitments[MUSIG[musiglocation]->myind * 32],session,MUSIG[musiglocation]->msg,&MUSIG[musiglocation]->combined_pk,MUSIG[musiglocation]->pkhash,MUSIG[musiglocation]->num,MUSIG[musiglocation]->myind,privkey) > 0 )
         {
             memset(session,0,sizeof(session));
@@ -531,7 +531,7 @@ UniValue musig_commit(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
          *                    number of signers participating in the MuSig.
          */
         result.push_back(Pair("added_index",ind));
-        //LogPrintf( "COMMIT: struct_size.%li using_struct.%i added_index.%i\n",MUSIG.size(), myind, ind);
+        //fprintf(stderr, "COMMIT: struct_size.%li using_struct.%i added_index.%i\n",MUSIG.size(), myind, ind);
         MUSIG[myind]->numcommits++;
         if ( MUSIG[myind]->numcommits >= MUSIG[myind]->num && secp256k1_musig_session_get_public_nonce(ctx,&MUSIG[myind]->session,MUSIG[myind]->signer_data,&MUSIG[myind]->nonces[MUSIG[myind]->myind],MUSIG[myind]->commitment_ptrs,MUSIG[myind]->num) > 0 )
         {
@@ -589,7 +589,7 @@ UniValue musig_nonce(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
          *  In:     nonce: signer's alleged public nonce (cannot be NULL)
          */
         MUSIG[myind]->numnonces++;
-        //LogPrintf( "NONCE: struct_size.%li using_struct.%i added_index.%i numnounces.%i num.%i\n",MUSIG.size(), myind, ind, MUSIG[myind]->numnonces, MUSIG[myind]->num);
+        //fprintf(stderr, "NONCE: struct_size.%li using_struct.%i added_index.%i numnounces.%i num.%i\n",MUSIG.size(), myind, ind, MUSIG[myind]->numnonces, MUSIG[myind]->num);
         if ( MUSIG[myind]->numnonces < MUSIG[myind]->num )
         {
             result.push_back(Pair("status","not enough nonces"));
@@ -663,7 +663,7 @@ UniValue musig_partialsig(uint64_t txfee,struct CCcontract_info *cp,cJSON *param
         else if ( secp256k1_musig_partial_signature_parse(ctx,&MUSIG[myind]->partial_sig[ind],psig) == 0 )
             return(cclib_error(result,"error parsing partialsig"));
         result.push_back(Pair("added_index",ind));
-        //LogPrintf( "SIG: struct_size.%li using_struct.%i added_index.%i\n",MUSIG.size(), myind, ind);
+        //fprintf(stderr, "SIG: struct_size.%li using_struct.%i added_index.%i\n",MUSIG.size(), myind, ind);
         MUSIG[myind]->numpartials++;
         if ( MUSIG[myind]->numpartials >= MUSIG[myind]->num && secp256k1_musig_partial_sig_combine(ctx,&MUSIG[myind]->session,&sig,MUSIG[myind]->partial_sig,MUSIG[myind]->num) > 0 )
         {

@@ -258,7 +258,7 @@ bool payments_game(int32_t &top, int32_t &bottom)
     if ( top < 50 ) top += 50;
     bottom = (vAddressSnapshot.size()*bottom)/100;
     top = (vAddressSnapshot.size()*top)/100;
-    //LogPrintf( "bottom.%i top.%i\n",bottom,top);
+    //fprintf(stderr, "bottom.%i top.%i\n",bottom,top);
     return true;
 }
 
@@ -269,7 +269,7 @@ bool payments_lockedblocks(uint256 blockhash,int32_t lockedblocks,int32_t &block
     if ( pblockindex == 0 || pblockindex->GetHeight()+lockedblocks > ht)
     {
         blocksleft = pblockindex->GetHeight()+lockedblocks - ht;
-        LogPrintf( "not elegible to be spent yet height.%i vs elegible_ht.%i blocksleft.%i\n",ht,(pblockindex!=0?pblockindex->GetHeight():0)+lockedblocks,blocksleft);
+        fprintf(stderr, "not elegible to be spent yet height.%i vs elegible_ht.%i blocksleft.%i\n",ht,(pblockindex!=0?pblockindex->GetHeight():0)+lockedblocks,blocksleft);
         return false; 
     }
     return true;
@@ -293,7 +293,7 @@ int32_t payments_getallocations(int32_t top, int32_t bottom, const std::vector<s
         {
             mpz_init(mpzAllocation); 
             i++;
-            //LogPrintf( "address: %s nValue.%li \n", CBitcoinAddress(address.second).ToString().c_str(), address.first);
+            //fprintf(stderr, "address: %s nValue.%li \n", CBitcoinAddress(address.second).ToString().c_str(), address.first);
             scriptPubKeys.push_back(scriptPubKey);
             allocations.push_back(address.first);
             mpz_set_lli(mpzAllocation,address.first);
@@ -350,7 +350,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             Paymentspk = GetUnspendable(cp,0);
             txidpk = CCtxidaddr(txidaddr,createtxid);
             GetCCaddress1of2(cp,txidaddr,Paymentspk,txidpk);
-            //LogPrintf( "lockedblocks.%i minrelease.%i totalallocations.%i txidopret1.%s txidopret2.%s\n",lockedblocks, minrelease, totalallocations, txidoprets[0].ToString().c_str(), txidoprets[1].ToString().c_str() );
+            //fprintf(stderr, "lockedblocks.%i minrelease.%i totalallocations.%i txidopret1.%s txidopret2.%s\n",lockedblocks, minrelease, totalallocations, txidoprets[0].ToString().c_str(), txidoprets[1].ToString().c_str() );
             if ( !CheckTxFee(tx, PAYMENTS_TXFEE+1, chainActive.LastTip()->GetHeight(), chainActive.LastTip()->nTime, actualtxfee) )
                 return eval->Invalid("txfee is too high");
             // Check that the change vout is playing the txid address. 
@@ -361,7 +361,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             {
                 if ( amountReleased < minrelease*COIN )
                 {
-                    LogPrintf( "does not meet minrelease amount.%li minrelease.%li\n",amountReleased, (int64_t)minrelease*COIN);
+                    fprintf(stderr, "does not meet minrelease amount.%li minrelease.%li\n",amountReleased, (int64_t)minrelease*COIN);
                     return(eval->Invalid("amount is too small"));
                 }
                 // Get all the script pubkeys and allocations
@@ -379,26 +379,26 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                         {
                             scriptPubKeys.push_back(CScript(scriptPubKey.begin(), scriptPubKey.end()));
                             allocations.push_back(allocation);
-                            //LogPrintf( "i.%i scriptpubkey.%s allocation.%li\n",i,scriptPubKeys[i].ToString().c_str(),allocation);
+                            //fprintf(stderr, "i.%i scriptpubkey.%s allocation.%li\n",i,scriptPubKeys[i].ToString().c_str(),allocation);
                             checkallocations += allocation;
                             // if we have an op_return to pay to need to check it exists and is paying the correct opret. 
                             if ( !opret.empty() )
                             {
                                 if ( !fHasOpret )
                                 {
-                                    LogPrintf( "missing opret.%s in payments release.\n",HexStr(opret.begin(), opret.end()).c_str());
+                                    fprintf(stderr, "missing opret.%s in payments release.\n",HexStr(opret.begin(), opret.end()).c_str());
                                     return(eval->Invalid("missing opret in payments release"));
                                 }
                                 else if ( CScript(opret.begin(),opret.end()) != tx.vout[tx.vout.size()-1].scriptPubKey )
                                 {
-                                    LogPrintf( "opret.%s vs opret.%s\n",HexStr(opret.begin(), opret.end()).c_str(), HexStr(tx.vout[tx.vout.size()-1].scriptPubKey.begin(), tx.vout[tx.vout.size()-1].scriptPubKey.end()).c_str());
+                                    fprintf(stderr, "opret.%s vs opret.%s\n",HexStr(opret.begin(), opret.end()).c_str(), HexStr(tx.vout[tx.vout.size()-1].scriptPubKey.begin(), tx.vout[tx.vout.size()-1].scriptPubKey.end()).c_str());
                                     return(eval->Invalid("pays incorrect opret"));
                                 }
                             }
                         }
                         i++;
                     }
-                    //LogPrintf( "totalallocations.%li checkallocations.%li\n",totalallocations, checkallocations);
+                    //fprintf(stderr, "totalallocations.%li checkallocations.%li\n",totalallocations, checkallocations);
                     if ( totalallocations != checkallocations )
                         return(eval->Invalid("allocation missmatch"));
                     mpz_set_lli(mpzTotalAllocations,totalallocations);
@@ -431,7 +431,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                     }
                 }
                 // sanity check to make sure we got all the required info, skip for merge type tx
-                //LogPrintf( " allocations.size().%li scriptPubKeys.size.%li\n",allocations.size(), scriptPubKeys.size());
+                //fprintf(stderr, " allocations.size().%li scriptPubKeys.size.%li\n",allocations.size(), scriptPubKeys.size());
                 if ( (allocations.size() == 0 || scriptPubKeys.size() == 0 || allocations.size() != scriptPubKeys.size()) )
                     return(eval->Invalid("missing data cannot validate"));
 
@@ -444,7 +444,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                     int64_t test;
                     if ( scriptPubKeys[n] != tx.vout[i].scriptPubKey )
                     {
-                        LogPrintf( "pays wrong destination destscriptPubKey.%s voutscriptPubKey.%s\n", HexStr(scriptPubKeys[n].begin(),scriptPubKeys[n].end()).c_str(), HexStr(tx.vout[i].scriptPubKey.begin(),tx.vout[i].scriptPubKey.end()).c_str());
+                        fprintf(stderr, "pays wrong destination destscriptPubKey.%s voutscriptPubKey.%s\n", HexStr(scriptPubKeys[n].begin(),scriptPubKeys[n].end()).c_str(), HexStr(tx.vout[i].scriptPubKey.begin(),tx.vout[i].scriptPubKey.end()).c_str());
                         return(eval->Invalid("pays wrong address"));
                     }
                     if ( fFixedAmount )
@@ -466,13 +466,13 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                     //fprintf(stderr, "vout.%i test.%lli vs nVlaue.%lli\n",i, (long long)test, (long long)tx.vout[i].nValue);
                     if ( test != tx.vout[i].nValue ) 
                     {
-                        LogPrintf("vout.%i test.%lli vs nVlaue.%lli\n",i, (long long)test, (long long)tx.vout[i].nValue);
+                        fprintf(stderr, "vout.%i test.%lli vs nVlaue.%lli\n",i, (long long)test, (long long)tx.vout[i].nValue);
                         return(eval->Invalid("amounts do not match"));
                     }
                     if ( test < minimum )
                     {
                         // prevent anyone being paid the minimum.
-                        LogPrintf( "vout.%i test.%li vs minimum.%i\n",i, test, minimum);
+                        fprintf(stderr, "vout.%i test.%li vs minimum.%i\n",i, test, minimum);
                         return(eval->Invalid("under minimum size"));
                     }
                     amount += tx.vout[i].nValue;
@@ -510,7 +510,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                         uint256 checktxid; 
                         if ( vinccopret.size() < 2 || DecodePaymentsFundOpRet(vinccopret,checktxid) != 'F' || checktxid != createtxid )
                         {
-                            LogPrintf( "vin.%i is not a payments CC vout: txid.%s vout.%i\n", i, txin.GetHash().ToString().c_str(), vin.prevout.n);
+                            fprintf(stderr, "vin.%i is not a payments CC vout: txid.%s vout.%i\n", i, txin.GetHash().ToString().c_str(), vin.prevout.n);
                             return(eval->Invalid("vin is not paymentsCC type"));
                         }
                     }
@@ -528,7 +528,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                     // check the chain depth vs locked blocks requirement. 
                     if ( !payments_lockedblocks(blockhash, lockedblocks+mergeoffset, blocksleft) )
                     {
-                        LogPrintf( "vin.%i is not elegible for.%i blocks \n",i, blocksleft);
+                        fprintf(stderr, "vin.%i is not elegible for.%i blocks \n",i, blocksleft);
                         return(eval->Invalid("vin not elegible"));
                     }
                     i++;
@@ -588,7 +588,7 @@ int64_t AddPaymentsInputs(bool fLockedBlocks,int8_t GetBalance,struct CCcontract
                         if ( iter == 0 && (DecodePaymentsFundOpRet(ccopret,checktxid) != 'F' || checktxid != createtxid) )
                         {
                             // global address but not for this plan.
-                            LogPrintf("bad opret %s vs %s\n",checktxid.GetHex().c_str(),createtxid.GetHex().c_str());
+                            fprintf(stderr,"bad opret %s vs %s\n",checktxid.GetHex().c_str(),createtxid.GetHex().c_str());
                             continue;
                         }
                         // increase merge offset, if this is a merge tx, merging merged utxos.
@@ -610,10 +610,10 @@ int64_t AddPaymentsInputs(bool fLockedBlocks,int8_t GetBalance,struct CCcontract
                         blocksleft++; // count all utxos with unused variable.
                     totalinputs += nValue;
                     n++;
-                    //LogPrintf("iter.%d %s/v%d %s %.8f\n",iter,txid.GetHex().c_str(),vout,coinaddr,(double)nValue/COIN);
+                    //fprintf(stderr,"iter.%d %s/v%d %s %.8f\n",iter,txid.GetHex().c_str(),vout,coinaddr,(double)nValue/COIN);
                     if ( GetBalance == 0 && ((total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs)) )
                         break; // create tx. We have ebnough inputs to make it. 
-                } //else LogPrintf("nValue %.8f vs threshold %.8f\n",(double)nValue/COIN,(double)threshold/COIN);
+                } //else fprintf(stderr,"nValue %.8f vs threshold %.8f\n",(double)nValue/COIN,(double)threshold/COIN);
             }
         }
     }
@@ -679,7 +679,7 @@ cJSON *payments_reparse(int32_t *nump,char *jsonstr)
         newstr[j] = 0;
         params = cJSON_Parse(newstr);
         if ( 0 && params != 0 )
-            LogPrintf("new.(%s) -> %s\n",newstr,jprint(params,0));
+            printf("new.(%s) -> %s\n",newstr,jprint(params,0));
         free(newstr);
         *nump = cJSON_GetArraySize(params);
     }
@@ -751,7 +751,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
                 std::vector<std::vector<unsigned char>> vData = std::vector<std::vector<unsigned char>>();
                 if ( makeCCopret(ccopret, vData) )
                     mtx.vout.push_back(MakeCC1of2vout(EVAL_PAYMENTS,0,Paymentspk,txidpk,&vData));
-                //LogPrintf( "funcid.%i\n", funcid);
+                //fprintf(stderr, "funcid.%i\n", funcid);
                 if ( funcid == 'C' )
                 {
                     // normal payments
@@ -894,7 +894,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
                         } 
                     }
                     mpz_clear(mpzValue);
-                    //LogPrintf( "[%i] nValue.%li minimum.%i scriptpubkey.%s\n", i, mtx.vout[i+1].nValue, minimum, HexStr(mtx.vout[i+1].scriptPubKey.begin(),mtx.vout[i+1].scriptPubKey.end()).c_str());
+                    //fprintf(stderr, "[%i] nValue.%li minimum.%i scriptpubkey.%s\n", i, mtx.vout[i+1].nValue, minimum, HexStr(mtx.vout[i+1].scriptPubKey.begin(),mtx.vout[i+1].scriptPubKey.end()).c_str());
                     if ( mtx.vout[i+1].nValue < minimum )
                     {
                         if ( skipminimum == 0 )
@@ -1135,7 +1135,7 @@ UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr)
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error","parameters error"));
         result.push_back(Pair("n",(int64_t)n));
-        LogPrintf("(%s) %p\n",jsonstr,params);
+        fprintf(stderr,"(%s) %p\n",jsonstr,params);
     }
     if ( params != 0 )
         free_json(params);
@@ -1164,7 +1164,7 @@ UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr)
         for (i=0; i<txidoprets.size(); i++)
         {
             std::vector<uint8_t> scriptPubKey,opret; int64_t allocation;
-            //LogPrintf( "txid.%s\n",txidoprets[i].GetHex().c_str());
+            //fprintf(stderr, "txid.%s\n",txidoprets[i].GetHex().c_str());
             if ( myGetTransaction(txidoprets[i],tx,hashBlock) != 0 && tx.vout.size() > 1 && DecodePaymentsTxidOpRet(tx.vout[tx.vout.size()-1].scriptPubKey,allocation,scriptPubKey,opret) == 'T' )
             {
                 totalallocations += allocation;
@@ -1425,19 +1425,19 @@ UniValue PaymentsInfo(struct CCcontract_info *cp,char *jsonstr)
                         for (j=0; j<scriptPubKey.size(); j++)
                             sprintf(&outstr[j<<1],"%02x",scriptPubKey[j]);
                         outstr[j<<1] = 0;
-                        //LogPrintf("scriptPubKey.(%s)\n",outstr);
+                        //fprintf(stderr,"scriptPubKey.(%s)\n",outstr);
                         obj.push_back(Pair("scriptPubKey",outstr));
                         if ( opret.size() != 0 )
                         {
                             for (j=0; j<opret.size(); j++)
                                 sprintf(&outstr[j<<1],"%02x",opret[j]);
                             outstr[j<<1] = 0;
-                            //LogPrintf("opret.(%s)\n",outstr);
+                            //fprintf(stderr,"opret.(%s)\n",outstr);
                             obj.push_back(Pair("opreturn",outstr));
                             numoprets++;
                         }
                         free(outstr);
-                    } else LogPrintf("error decoding voutsize.%d\n",(int32_t)txO.vout.size());
+                    } else fprintf(stderr,"error decoding voutsize.%d\n",(int32_t)txO.vout.size());
                     a.push_back(obj);
                 }
                 result.push_back(Pair("numoprets",(int64_t)numoprets));
@@ -1545,7 +1545,7 @@ UniValue PaymentsList(struct CCcontract_info *cp,char *jsonstr)
     int32_t top=0,bottom=0,minimum=10000; std::vector<std::vector<uint8_t>> excludeScriptPubKeys; int8_t fixedAmount = 0;
     Paymentspk = GetUnspendable(cp,0);
     GetCCaddress1of2(cp,markeraddr,Paymentspk,Paymentspk);
-    SetCCtxids(addressIndex,markeraddr,true);
+    SetAddressIndexOutputs(addressIndex,markeraddr,true);
     for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++)
     {
         txid = it->first.txhash;

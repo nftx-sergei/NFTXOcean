@@ -82,15 +82,15 @@ bool LottoExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction 
     numvouts = tx.vout.size();
     for (i=0; i<numvins; i++)
     {
-        //LogPrintf("vini.%d\n",i);
+        //fprintf(stderr,"vini.%d\n",i);
         if ( (*cp->ismyvin)(tx.vin[i].scriptSig) != 0 )
         {
-            //LogPrintf("vini.%d check mempool\n",i);
+            //fprintf(stderr,"vini.%d check mempool\n",i);
             if ( eval->GetTxUnconfirmed(tx.vin[i].prevout.hash,vinTx,hashBlock) == 0 )
                 return eval->Invalid("cant find vinTx");
             else
             {
-                //LogPrintf("vini.%d check hash and vout\n",i);
+                //fprintf(stderr,"vini.%d check hash and vout\n",i);
                 if ( hashBlock == zerohash )
                     return eval->Invalid("cant Lotto from mempool");
                 if ( (assetoshis= IsLottovout(cp,vinTx,tx.vin[i].prevout.n)) != 0 )
@@ -100,13 +100,13 @@ bool LottoExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction 
     }
     for (i=0; i<numvouts; i++)
     {
-        //LogPrintf("i.%d of numvouts.%d\n",i,numvouts);
+        //fprintf(stderr,"i.%d of numvouts.%d\n",i,numvouts);
         if ( (assetoshis= IsLottovout(cp,tx,i)) != 0 )
             outputs += assetoshis;
     }
     if ( inputs != outputs+txfee )
     {
-        LogPrintf("inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
+        fprintf(stderr,"inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
         return eval->Invalid("mismatched inputs != outputs + txfee");
     }
     else return(true);
@@ -123,19 +123,19 @@ bool LottoValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx,
         return eval->Invalid("no vouts");
     else
     {
-        //LogPrintf("check vins\n");
+        //fprintf(stderr,"check vins\n");
         for (i=0; i<numvins; i++)
         {
             if ( IsCCInput(tx.vin[0].scriptSig) == 0 )
             {
-                LogPrintf("Lottoget invalid vini\n");
+                fprintf(stderr,"Lottoget invalid vini\n");
                 return eval->Invalid("illegal normal vini");
             }
         }
-        //LogPrintf("check amounts\n");
+        //fprintf(stderr,"check amounts\n");
         if ( LottoExactAmounts(cp,eval,tx,1,10000) == false )
         {
-            LogPrintf("Lottoget invalid amount\n");
+            fprintf(stderr,"Lottoget invalid amount\n");
             return false;
         }
         else
@@ -150,8 +150,8 @@ bool LottoValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx,
                 return eval->Invalid("invalid Lotto output");
             retval = PreventCC(eval,tx,preventCCvins,numvins,preventCCvouts,numvouts);
             if ( retval != 0 )
-                LogPrintf("Lottoget validated\n");
-            else LogPrintf("Lottoget invalid\n");
+                fprintf(stderr,"Lottoget validated\n");
+            else fprintf(stderr,"Lottoget invalid\n");
             return(retval);
         }
     }
@@ -222,9 +222,9 @@ int64_t LottoPlanFunds(uint64_t refsbits,struct CCcontract_info *cp,CPubKey pk,u
                 {
                     if ( (nValue= IsLottovout(cp,tx,vout)) > 0 )
                         lockedfunds += nValue;
-                    else LogPrintf("refsbits.%llx sbits.%llx nValue %.8f\n",(long long)refsbits,(long long)sbits,(double)nValue/COIN);
-                } //else LogPrintf("else case\n");
-            } //else LogPrintf("funcid.%d %c skipped %.8f\n",funcid,funcid,(double)tx.vout[vout].nValue/COIN);
+                    else fprintf(stderr,"refsbits.%llx sbits.%llx nValue %.8f\n",(long long)refsbits,(long long)sbits,(double)nValue/COIN);
+                } //else fprintf(stderr,"else case\n");
+            } //else fprintf(stderr,"funcid.%d %c skipped %.8f\n",funcid,funcid,(double)tx.vout[vout].nValue/COIN);
         }
     }
     return(lockedfunds);
@@ -235,14 +235,14 @@ UniValue LottoInfo(uint256 lottoid)
     UniValue result(UniValue::VOBJ); uint256 hashBlock,hentropy; CTransaction vintx; uint64_t lockedfunds,sbits; int32_t ticketsize,odds,firstheight,period; CPubKey lottopk; struct CCcontract_info *cp,C; char str[67],numstr[65];
     if ( myGetTransaction(lottoid,vintx,hashBlock) == 0 )
     {
-        LogPrintf("cant find lottoid\n");
+        fprintf(stderr,"cant find lottoid\n");
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error","cant find lottoid"));
         return(result);
     }
     if ( vintx.vout.size() > 0 && DecodeLottoFundingOpRet(vintx.vout[vintx.vout.size()-1].scriptPubKey,sbits,ticketsize,odds,firstheight,period,hentropy) == 0 )
     {
-        LogPrintf("lottoid isnt lotto creation txid\n");
+        fprintf(stderr,"lottoid isnt lotto creation txid\n");
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error","lottoid isnt lotto creation txid"));
         return(result);
@@ -266,7 +266,7 @@ UniValue LottoList()
 {
     UniValue result(UniValue::VARR); std::vector<uint256> txids; struct CCcontract_info *cp,C; uint256 txid,hashBlock,hentropy; CTransaction vintx; uint64_t sbits; int32_t ticketsize,odds,firstheight,period; char str[65];
     cp = CCinit(&C,EVAL_LOTTO);
-    SetCCtxids(txids,cp->normaladdr,true,cp->evalcode,zeroid,'F');
+    SetCCtxids(txids,cp->normaladdr,true,cp->evalcode,0,zeroid,'F');
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     {
         txid = *it;
@@ -316,8 +316,8 @@ std::string LottoTicket(uint64_t txfee,uint256 lottoid,int64_t numtickets)
         if ( CCchange != 0 )
             mtx.vout.push_back(MakeCC1vout(EVAL_LOTTO,CCchange,lottopk));
         mtx.vout.push_back(CTxOut(nValue,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret));
-    } else LogPrintf("cant find Lotto inputs\n");
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret));
+    } else fprintf(stderr,"cant find Lotto inputs\n");
     return("");
 }
 

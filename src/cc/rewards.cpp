@@ -80,7 +80,7 @@ uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minsecon
     //fprintf(stderr,"minseconds %llu maxseconds %llu\n",(long long)minseconds,(long long)maxseconds);
     if ( (duration= CCduration(numblocks,txid)) < minseconds )
     {
-        LogPrintf("duration %llu < minseconds %llu\n",(long long)duration,(long long)minseconds);
+        fprintf(stderr,"duration %lli < minseconds %lli\n",(long long)duration,(long long)minseconds);
         return(0);
         //duration = (uint32_t)time(NULL) - (1532713903 - 3600 * 24);
     } else if ( duration > maxseconds )
@@ -119,7 +119,7 @@ uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minsecon
     }
     if ( reward > amount )
         reward = amount;
-    LogPrintf("amount.%lli duration.%lli APR.%lli reward.%llu\n", (long long)amount, (long long)duration, (long long)APR, (long long)reward);
+    fprintf(stderr, "amount.%lli duration.%lli APR.%lli reward.%llu\n", (long long)amount, (long long)duration, (long long)APR, (long long)reward);
     //fprintf(stderr,"amount %.8f %.8f %llu -> duration.%llu reward %.8f vals %.8f %.8f\n",(double)amount/COIN,((double)amount * APR)/COIN,(long long)((amount * APR) / (COIN * 365*24*3600)),(long long)duration,(double)reward/COIN,(double)((amount * duration) / (365 * 24 * 3600LL))/COIN,(double)(((amount * duration) / (365 * 24 * 3600LL)) * (APR / 1000000))/COIN);
     return(reward);
 }
@@ -166,16 +166,16 @@ uint8_t DecodeRewardsOpRet(uint256 txid,const CScript &scriptPubKey,uint64_t &sb
                 {
                     fundingtxid = txid;
                     return('F');
-                } else LogPrintf("unmarshal error for F\n");
+                } else fprintf(stderr,"unmarshal error for F\n");
             }
             else if ( E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> sbits; ss >> fundingtxid) != 0 )
             {
                 if ( e == EVAL_REWARDS && (f == 'L' || f == 'U' || f == 'A') )
                     return(f);
-                else LogPrintf("mismatched e.%02x f.(%c)\n",e,f);
+                else fprintf(stderr,"mismatched e.%02x f.(%c)\n",e,f);
             }
-        } else LogPrintf("script[0] %02x != EVAL_REWARDS\n",script[0]);
-    } else LogPrintf("not enough opret.[%d]\n",(int32_t)vopret.size());
+        } else fprintf(stderr,"script[0] %02x != EVAL_REWARDS\n",script[0]);
+    } else fprintf(stderr,"not enough opret.[%d]\n",(int32_t)vopret.size());
     return(0);
 }
 
@@ -218,13 +218,13 @@ bool RewardsExactAmounts(struct CCcontract_info *cp,Eval *eval,const CTransactio
     }
     for (i=0; i<numvouts; i++)
     {
-        //LogPrintf("i.%d of numvouts.%d\n",i,numvouts);
+        //fprintf(stderr,"i.%d of numvouts.%d\n",i,numvouts);
         if ( (assetoshis= IsRewardsvout(cp,tx,i,refsbits,reffundingtxid)) != 0 )
             outputs += assetoshis;
     }
     if ( inputs != outputs+txfee )
     {
-        LogPrintf("inputs %llu vs outputs %llu txfee %llu\n",(long long)inputs,(long long)outputs,(long long)txfee);
+        fprintf(stderr,"inputs %llu vs outputs %llu txfee %llu\n",(long long)inputs,(long long)outputs,(long long)txfee);
         return eval->Invalid("mismatched inputs != outputs + txfee");
     }
     else return(true);
@@ -333,7 +333,7 @@ bool RewardsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
                     preventCCvouts = 1;
                     break;
                 default:
-                    LogPrintf("illegal rewards funcid.(%c)\n",funcid);
+                    fprintf(stderr,"illegal rewards funcid.(%c)\n",funcid);
                     return eval->Invalid("unexpected rewards funcid");
                     break;
             }
@@ -362,7 +362,7 @@ static uint64_t myIs_unlockedtx_inmempool(uint256 &txid,int32_t &vout,uint64_t r
                     txid = hash;
                     vout = 0;
                     nValue = tx.vout[0].nValue;
-                    LogPrintf("found 'U' %s %.8f in unspent in mempool\n",uint256_str(str,txid),(double)nValue/COIN);
+                    fprintf(stderr,"found 'U' %s %.8f in unspent in mempool\n",uint256_str(str,txid),(double)nValue/COIN);
                     return(nValue);
                 }
             }
@@ -389,7 +389,7 @@ int64_t AddRewardsInputs(CScript &scriptPubKey,uint64_t maxseconds,struct CCcont
         vout = (int32_t)it->first.index;
         if ( it->second.satoshis < threshold )
             continue;
-        //LogPrintf("(%s) %s/v%d %.8f\n",coinaddr,uint256_str(str,txid),vout,(double)it->second.satoshis/COIN);
+        //fprintf(stderr,"(%s) %s/v%d %.8f\n",coinaddr,uint256_str(str,txid),vout,(double)it->second.satoshis/COIN);
         for (j=0; j<mtx.vin.size(); j++)
             if ( txid == mtx.vin[j].prevout.hash && vout == mtx.vin[j].prevout.n )
                 break;
@@ -408,7 +408,7 @@ int64_t AddRewardsInputs(CScript &scriptPubKey,uint64_t maxseconds,struct CCcont
                     if ( CCduration(numblocks,txid) < maxseconds )
                         continue;
                 }
-                LogPrintf("maxseconds.%d (%c) %.8f %.8f\n",(int32_t)maxseconds,funcid,(double)tx.vout[vout].nValue/COIN,(double)it->second.satoshis/COIN);
+                fprintf(stderr,"maxseconds.%d (%c) %.8f %.8f\n",(int32_t)maxseconds,funcid,(double)tx.vout[vout].nValue/COIN,(double)it->second.satoshis/COIN);
                 if ( total != 0 && maxinputs != 0 )
                 {
                     if ( maxseconds != 0 )
@@ -419,16 +419,16 @@ int64_t AddRewardsInputs(CScript &scriptPubKey,uint64_t maxseconds,struct CCcont
                 n++;
                 if ( (total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs) )
                     break;
-            } else LogPrintf("null funcid\n");
+            } else fprintf(stderr,"null funcid\n");
         }
     }
     if ( maxseconds == 0 && totalinputs < total && (maxinputs == 0 || n < maxinputs-1) )
     {
-        LogPrintf("search mempool for unlocked and unspent CC rewards output for %.8f\n",(double)(total-totalinputs)/COIN);
+        fprintf(stderr,"search mempool for unlocked and unspent CC rewards output for %.8f\n",(double)(total-totalinputs)/COIN);
         if ( (nValue= myIs_unlockedtx_inmempool(txid,vout,refsbits,reffundingtxid,total-totalinputs)) > 0 )
         {
             mtx.vin.push_back(CTxIn(txid,vout,CScript()));
-            LogPrintf("added mempool vout for %.8f\n",(double)nValue/COIN);
+            fprintf(stderr,"added mempool vout for %.8f\n",(double)nValue/COIN);
             totalinputs += nValue;
             n++;
         }
@@ -459,9 +459,9 @@ int64_t RewardsPlanFunds(uint64_t &lockedfunds,uint64_t refsbits,struct CCcontra
                             lockedfunds += nValue;
                         else totalinputs += nValue;
                     }
-                    else LogPrintf("refsbits.%llx sbits.%llx nValue %.8f\n",(long long)refsbits,(long long)sbits,(double)nValue/COIN);
-                } //else LogPrintf("else case\n");
-            } else LogPrintf("funcid.%d %c skipped %.8f\n",funcid,funcid,(double)tx.vout[vout].nValue/COIN);
+                    else fprintf(stderr,"refsbits.%llx sbits.%llx nValue %.8f\n",(long long)refsbits,(long long)sbits,(double)nValue/COIN);
+                } //else fprintf(stderr,"else case\n");
+            } else fprintf(stderr,"funcid.%d %c skipped %.8f\n",funcid,funcid,(double)tx.vout[vout].nValue/COIN);
         }
     }
     return(totalinputs);
@@ -472,14 +472,14 @@ bool RewardsPlanExists(struct CCcontract_info *cp,uint64_t refsbits,CPubKey rewa
     char CCaddr[64]; uint64_t sbits; uint256 txid,hashBlock; CTransaction tx;
     std::vector<uint256> txids;
     GetCCaddress(cp,CCaddr,rewardspk);
-    SetCCtxids(txids,CCaddr,true,cp->evalcode,zeroid,'F');
+    SetCCtxids(txids,CCaddr,true,cp->evalcode,0,zeroid,'F');
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     {
         //int height = it->first.blockHeight;
         txid = *it;
         if ( myGetTransaction(txid,tx,hashBlock) != 0 && tx.vout.size() > 0 && ConstrainVout(tx.vout[0],1,CCaddr,0) != 0 )
         {
-            //char str[65]; LogPrintf("rewards plan %s\n",uint256_str(str,txid));
+            //char str[65]; fprintf(stderr,"rewards plan %s\n",uint256_str(str,txid));
             if ( DecodeRewardsFundingOpRet(tx.vout[tx.vout.size()-1].scriptPubKey,sbits,APR,minseconds,maxseconds,mindeposit) == 'F' )
             {
                 if ( sbits == refsbits )
@@ -495,14 +495,14 @@ UniValue RewardsInfo(uint256 rewardsid)
     UniValue result(UniValue::VOBJ); uint256 hashBlock; CTransaction vintx; uint64_t lockedfunds,APR,minseconds,maxseconds,mindeposit,sbits,funding; CPubKey rewardspk; struct CCcontract_info *cp,C; char str[67],numstr[65];
     if ( myGetTransaction(rewardsid,vintx,hashBlock) == 0 )
     {
-        LogPrintf("cant find fundingtxid\n");
+        fprintf(stderr,"cant find fundingtxid\n");
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error","cant find fundingtxid"));
         return(result);
     }
     if ( vintx.vout.size() > 0 && DecodeRewardsFundingOpRet(vintx.vout[vintx.vout.size()-1].scriptPubKey,sbits,APR,minseconds,maxseconds,mindeposit) == 0 )
     {
-        LogPrintf("fundingtxid isnt rewards creation txid\n");
+        fprintf(stderr,"fundingtxid isnt rewards creation txid\n");
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error","fundingtxid isnt rewards creation txid"));
         return(result);
@@ -532,7 +532,7 @@ UniValue RewardsList()
 {
     UniValue result(UniValue::VARR); std::vector<uint256> txids; struct CCcontract_info *cp,C; uint256 txid,hashBlock; CTransaction vintx; uint64_t sbits,APR,minseconds,maxseconds,mindeposit; char str[65];
     cp = CCinit(&C,EVAL_REWARDS);
-    SetCCtxids(txids,cp->normaladdr,false,cp->evalcode,zeroid,'F');
+    SetCCtxids(txids,cp->normaladdr,false,cp->evalcode,0,zeroid,'F');
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     {
         txid = *it;
@@ -553,12 +553,12 @@ std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int6
     CPubKey mypk,rewardspk; CScript opret; uint64_t sbits,a,b,c,d; struct CCcontract_info *cp,C;
     if ( funds < COIN || mindeposit < 0 || minseconds < 0 || maxseconds < 0 )
     {
-        LogPrintf("negative parameter error\n");
+        fprintf(stderr,"negative parameter error\n");
         return("");
     }
     if ( APR > REWARDSCC_MAXAPR )
     {
-        LogPrintf("25%% APR is maximum\n");
+        fprintf(stderr,"25%% APR is maximum\n");
         return("");
     }
     cp = CCinit(&C,EVAL_REWARDS);
@@ -569,7 +569,7 @@ std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int6
     sbits = stringbits(planstr);
     if ( RewardsPlanExists(cp,sbits,rewardspk,a,b,c,d) != 0 )
     {
-        LogPrintf("Rewards plan (%s) already exists\n",planstr);
+        fprintf(stderr,"Rewards plan (%s) already exists\n",planstr);
         return("");
     }
     if ( AddNormalinputs(mtx,mypk,funds+2*txfee,64) > 0 )
@@ -578,7 +578,7 @@ std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int6
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(rewardspk)) << OP_CHECKSIG));
         return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsFundingOpRet('F',sbits,APR,minseconds,maxseconds,mindeposit)));
     }
-    LogPrintf("cant find enough inputs\n");
+    fprintf(stderr,"cant find enough inputs\n");
     return("");
 }
 
@@ -588,7 +588,7 @@ std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,i
     CPubKey mypk,rewardspk; CScript opret; uint64_t sbits,a,b,c,d; struct CCcontract_info *cp,C;
     if ( amount < 0 )
     {
-        LogPrintf("negative parameter error\n");
+        fprintf(stderr,"negative parameter error\n");
         return("");
     }
     cp = CCinit(&C,EVAL_REWARDS);
@@ -600,7 +600,7 @@ std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,i
     if ( RewardsPlanExists(cp,sbits,rewardspk,a,b,c,d) == 0 )
     {
         CCerror = strprintf("Rewards plan %s doesnt exist\n",planstr);
-        LogPrintf("%s\n",CCerror.c_str());
+        fprintf(stderr,"%s\n",CCerror.get_msg());
         return("");
     }
     sbits = stringbits(planstr);
@@ -610,10 +610,10 @@ std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,i
         return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('A',sbits,fundingtxid)));
     } else {
         CCerror = "cant find enough inputs";
-        LogPrintf("%s\n", CCerror.c_str());
+        fprintf(stderr,"%s\n", CCerror.get_msg());
     }
     CCerror = "cant find fundingtxid";
-    LogPrintf("%s\n", CCerror.c_str());
+    fprintf(stderr,"%s\n", CCerror.get_msg());
     return("");
 }
 
@@ -624,7 +624,7 @@ std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t
     if ( deposit < txfee )
     {
         CCerror = "deposit amount less than txfee";
-        LogPrintf("%s\n",CCerror.c_str());
+        fprintf(stderr,"%s\n",CCerror.get_msg());
         return("");
     }
     cp = CCinit(&C,EVAL_REWARDS);
@@ -636,13 +636,13 @@ std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t
     if ( RewardsPlanExists(cp,sbits,rewardspk,APR,minseconds,maxseconds,mindeposit) == 0 )
     {
         CCerror = strprintf("Rewards plan %s doesnt exist\n",planstr);
-        LogPrintf("%s\n",CCerror.c_str());
+        fprintf(stderr,"%s\n",CCerror.get_msg());
         return("");
     }
     if ( deposit < mindeposit )
     {
         CCerror = strprintf("Rewards plan %s deposit %.8f < mindeposit %.8f\n",planstr,(double)deposit/COIN,(double)mindeposit/COIN);
-        LogPrintf("%s\n",CCerror.c_str());
+        fprintf(stderr,"%s\n",CCerror.get_msg());
         return("");
     }
     if ( (funding= RewardsPlanFunds(lockedfunds,sbits,cp,rewardspk,fundingtxid)) >= deposit ) // arbitrary cmpval
@@ -654,10 +654,10 @@ std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t
             return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('L',sbits,fundingtxid)));
         } else {
             CCerror = strprintf("cant find enough inputs %.8f not enough for %.8f, make sure you imported privkey for the -pubkey address\n",(double)funding/COIN,(double)deposit/COIN);
-            LogPrintf("%s\n",CCerror.c_str());
+            fprintf(stderr,"%s\n",CCerror.get_msg());
         }
     }
-    LogPrintf("cant find rewards inputs funding %.8f locked %.8f vs deposit %.8f\n",(double)funding/COIN,(double)lockedfunds/COIN,(double)deposit/COIN);
+    fprintf(stderr,"cant find rewards inputs funding %.8f locked %.8f vs deposit %.8f\n",(double)funding/COIN,(double)lockedfunds/COIN,(double)deposit/COIN);
     return("");
 }
 
@@ -673,17 +673,17 @@ std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint2
     sbits = stringbits(planstr);
     if ( locktxid == fundingtxid )
     {
-        LogPrintf("Rewards plan cant unlock fundingtxid\n");
+        fprintf(stderr,"Rewards plan cant unlock fundingtxid\n");
         CCerror = "Rewards plan cant unlock fundingtxid";
         return("");
     }
     if ( RewardsPlanExists(cp,sbits,rewardspk,APR,minseconds,maxseconds,mindeposit) == 0 )
     {
-        LogPrintf("Rewards plan %s doesnt exist\n",planstr);
+        fprintf(stderr,"Rewards plan %s doesnt exist\n",planstr);
         CCerror = "Rewards plan does not exist";
         return("");
     }
-    LogPrintf("APR %.8f minseconds.%llu maxseconds.%llu mindeposit %.8f\n",(double)APR/COIN,(long long)minseconds,(long long)maxseconds,(double)mindeposit/COIN);
+    fprintf(stderr,"APR %.8f minseconds.%llu maxseconds.%llu mindeposit %.8f\n",(double)APR/COIN,(long long)minseconds,(long long)maxseconds,(double)mindeposit/COIN);
     if ( locktxid == zeroid )
         amount = AddRewardsInputs(scriptPubKey,maxseconds,cp,mtx,rewardspk,(1LL << 30),1,sbits,fundingtxid);
     else
@@ -691,7 +691,7 @@ std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint2
         GetCCaddress(cp,coinaddr,rewardspk);
         if ( (amount= CCutxovalue(coinaddr,locktxid,0,1)) == 0 )
         {
-            LogPrintf("%s locktxid/v0 is spent\n",coinaddr);
+            fprintf(stderr,"%s locktxid/v0 is spent\n",coinaddr);
             CCerror = "locktxid/v0 is spent";
             return("");
         }
@@ -702,7 +702,7 @@ std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint2
         }
         else
         {
-            LogPrintf("%s no normal vout.1 in locktxid\n",coinaddr);
+            fprintf(stderr,"%s no normal vout.1 in locktxid\n",coinaddr);
             CCerror = "no normal vout.1 in locktxid";
             return("");
         }
@@ -719,36 +719,35 @@ std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint2
                 {
                     if ( inputs >= (reward + 2*txfee) )
                         CCchange = (inputs - (reward + txfee));
-                    LogPrintf("inputs %.8f CCchange %.8f amount %.8f reward %.8f\n",(double)inputs/COIN,(double)CCchange/COIN,(double)amount/COIN,(double)reward/COIN);
+                    fprintf(stderr,"inputs %.8f CCchange %.8f amount %.8f reward %.8f\n",(double)inputs/COIN,(double)CCchange/COIN,(double)amount/COIN,(double)reward/COIN);
                     mtx.vout.push_back(MakeCC1vout(cp->evalcode,CCchange,rewardspk));
                     mtx.vout.push_back(CTxOut(amount+reward,scriptPubKey));
-                    return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
+                    return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
                 }
                 else
                 {
                     firstmtx.vout.push_back(CTxOut(amount-txfee*2,scriptPubKey));
-                    LogPrintf("not enough rewards funds to payout %.8f, recover mode tx\n",(double)(reward+txfee)/COIN);
-                    return(FinalizeCCTx(-1LL,cp,firstmtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
+                    fprintf(stderr,"not enough rewards funds to payout %.8f, recover mode tx\n",(double)(reward+txfee)/COIN);
+                    return(FinalizeCCTx(0,cp,firstmtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
                 }
             }
             else
             {
                 CCerror = strprintf("reward %.8f is <= the transaction fee", reward);
-                LogPrintf("%s\n", CCerror.c_str());
+                fprintf(stderr,"%s\n", CCerror.get_msg());
             }
         }
         else
         {
             CCerror = "invalid scriptPubKey";
-            LogPrintf("%s\n", CCerror.c_str());
+            fprintf(stderr,"%s\n", CCerror.get_msg());
         }
     }
     else
     {
         CCerror = "amount must be more than txfee";
-        LogPrintf("%s\n", CCerror.c_str());
+        fprintf(stderr,"%s\n", CCerror.get_msg());
     }
-    LogPrintf("amount %.8f -> reward %.8f\n",(double)amount/COIN,(double)reward/COIN);
+    fprintf(stderr,"amount %.8f -> reward %.8f\n",(double)amount/COIN,(double)reward/COIN);
     return("");
 }
-

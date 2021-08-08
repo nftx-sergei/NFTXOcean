@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright ? 2014-2019 The SuperNET Developers.                             *
+ * Copyright � 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
  * See the AUTHORS, DEVELOPER-AGREEMENT and LICENSE files at                  *
  * the top-level directory of this distribution for the individual copyright  *
@@ -40,7 +40,7 @@ uint64_t stringbits(char *str)
         n = 8;
     for (i=n-1; i>=0; i--)
         bits = (bits << 8) | (str[i] & 0xff);
-    //LogPrintf("(%s) -> %llx %llu\n",str,(long long)bits,(long long)bits);
+    //printf("(%s) -> %llx %llu\n",str,(long long)bits,(long long)bits);
     return(bits);
 }
 
@@ -95,21 +95,66 @@ CPubKey buf2pk(uint8_t *buf33)
 
 CPubKey pubkey2pk(std::vector<uint8_t> vpubkey)
 {
-    CPubKey pk; 
+    CPubKey pk;
     pk.Set(vpubkey.begin(), vpubkey.end());
-    return(pk);
+    return pk;
 }
 
-void CCLogPrintStr(const char *category, int level, const std::string &str)
+// checks if category and level is enabled in -debug param
+// like -debug=cctokens (CCLOG_INFO) or -debug=cctokens-2 (CCLOG_DEBUG2 and lower levels)
+static bool cc_log_accept_category(const char *category, int level)
 {
     if (level < 0)
-        level = 0;
+        return true;  // always print errors
+
     if (level > CCLOG_MAXLEVEL)
         level = CCLOG_MAXLEVEL;
     for (int i = level; i <= CCLOG_MAXLEVEL; i++)
         if (LogAcceptCategory((std::string(category) + std::string("-") + std::to_string(i)).c_str()) ||     // '-debug=cctokens-0', '-debug=cctokens-1',...
-            i == 0 && LogAcceptCategory(std::string(category).c_str())) {                                  // also supporting '-debug=cctokens' for CCLOG_INFO
-            LogPrintStr(str);
-            break;
+            i == CCLOG_INFO && LogAcceptCategory(std::string(category).c_str())) {                                    // also supporting '-debug=cctokens' for CCLOG_INFO
+            return true;
         }
+    return false;
+}
+
+void CCLogPrintStr(const char *category, int level, const std::string &str)
+{
+    if (cc_log_accept_category(category, level))
+        LogPrintStr(str);
+}
+
+void CCLogPrintF(const char *category, int level, const char *format, ...)
+{
+    char logstr[2048];
+
+    if (cc_log_accept_category(category, level)) {
+        va_list args;
+        va_start(args, format);
+        vsnprintf(logstr, sizeof(logstr), format, args);
+        logstr[sizeof(logstr) - 1] = '\0';
+        LogPrintStr(logstr);
+        va_end(args);
+    }
+}
+
+thread_local bool is_remote_rpc_call;
+void SetRemoteRPCCall(bool isRemote)
+{
+    is_remote_rpc_call = isRemote;
+}
+
+bool IsRemoteRPCCall()
+{
+    return is_remote_rpc_call;
+}
+
+bool CCtoAnon(const CC* cond)
+{
+    for (int i = 0; i < cond->size; i++)
+        if (cc_typeId(cond->subconditions[i]) == CC_Threshold) {
+            CCwrapper tmp(cond->subconditions[i]);
+            cond->subconditions[i] = cc_anon(tmp.get());
+            return (true);
+        }
+    return (false);
 }

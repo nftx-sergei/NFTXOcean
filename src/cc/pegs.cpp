@@ -13,6 +13,9 @@
  *                                                                            *
  ******************************************************************************/
 
+#include "CCtokens.h"
+#include "CCtokens_impl.h"
+
 #include "CCPegs.h"
 #include "../importcoin.h"
 #include "key_io.h"
@@ -100,7 +103,7 @@ pegs CC is able to create a coin backed (by any supported coin with gateways CC 
 extern uint64_t ASSETCHAINS_PEGSCCPARAMS[3];
 
 extern uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &gatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
-extern int64_t GetTokenBalance(CPubKey pk, uint256 tokenid);
+//extern int64_t GetTokenBalance(CPubKey pk, uint256 tokenid);
 extern int32_t komodo_currentheight();
 extern int32_t prices_syntheticvec(std::vector<uint16_t> &vec, std::vector<std::string> synthetic);
 extern int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t minmax, int16_t leverage);
@@ -136,15 +139,15 @@ CScript EncodePegsFundOpRet(uint256 tokenid,uint256 pegstxid,CPubKey srcpub,int6
     pubkeys.push_back(pegspk);
     LOGSTREAM("pegscc", CCLOG_DEBUG1, stream  << "EncodePegsFundOpRet [" << account.first << "," << account.second << "]" << std::endl);
     vopret = E_MARSHAL(ss << evalcode << funcid << pegstxid << srcpub << amount << account);        
-    return(EncodeTokenOpRet(tokenid,pubkeys,make_pair(OPRETID_PEGSDATA, vopret)));
+    return(EncodeTokenOpRetV1(tokenid,pubkeys,{ vopret }));
 }
 
 uint8_t DecodePegsFundOpRet(const CScript &scriptPubKey,uint256 &tokenid,uint256 &pegstxid,CPubKey &srcpub,int64_t &amount,std::pair <int64_t,int64_t> &account)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode; std::vector<CPubKey> pubkeys;
+    std::vector<vscript_t>  oprets;
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
 
-    if (DecodeTokenOpRet(scriptPubKey,tokenevalcode,tokenid,pubkeys, oprets)!=0 && GetOpretBlob(oprets, OPRETID_PEGSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(scriptPubKey,tokenid,pubkeys, oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -180,15 +183,15 @@ CScript EncodePegsReedemOpRet(uint256 tokenid,uint256 pegstxid,CPubKey srcpub,in
     cp = CCinit(&C,EVAL_PEGS);
     pubkeys.push_back(srcpub);
     vopret = E_MARSHAL(ss << evalcode << funcid << pegstxid << srcpub << amount << account);        
-    return(EncodeTokenOpRet(tokenid,pubkeys,make_pair(OPRETID_PEGSDATA, vopret)));
+    return(EncodeTokenOpRetV1(tokenid,pubkeys, { vopret }));
 }
 
 uint8_t DecodePegsRedeemOpRet(const CScript &scriptPubKey,uint256 &tokenid,uint256 &pegstxid,CPubKey &srcpub,int64_t &amount,std::pair <int64_t,int64_t> &account)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode; std::vector<CPubKey> pubkeys;
+    std::vector<vscript_t>  oprets;
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
 
-    if (DecodeTokenOpRet(scriptPubKey,tokenevalcode,tokenid,pubkeys, oprets)!=0 && GetOpretBlob(oprets, OPRETID_PEGSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(scriptPubKey,tokenid,pubkeys, oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -211,15 +214,15 @@ CScript EncodePegsExchangeOpRet(uint256 tokenid,uint256 pegstxid,CPubKey pk1,CPu
     pubkeys.push_back(pk1);
     pubkeys.push_back(pk2);
     vopret = E_MARSHAL(ss << evalcode << funcid << pegstxid << pk1 << amount << account);        
-    return(EncodeTokenOpRet(tokenid,pubkeys,make_pair(OPRETID_PEGSDATA, vopret)));
+    return(EncodeTokenOpRetV1(tokenid,pubkeys, { vopret }));
 }
 
 uint8_t DecodePegsExchangeOpRet(const CScript &scriptPubKey,uint256 &tokenid,uint256 &pegstxid,CPubKey &srcpub,int64_t &amount,std::pair <int64_t,int64_t> &account)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode; std::vector<CPubKey> pubkeys;
+    std::vector<vscript_t>  oprets;
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
 
-    if (DecodeTokenOpRet(scriptPubKey,tokenevalcode,tokenid,pubkeys, oprets)!=0 && GetOpretBlob(oprets, OPRETID_PEGSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(scriptPubKey,tokenid,pubkeys, oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -240,15 +243,15 @@ CScript EncodePegsLiquidateOpRet(uint256 tokenid,uint256 pegstxid,CPubKey srcpub
     cp = CCinit(&C,EVAL_PEGS);
     pubkeys.push_back(srcpub);
     vopret = E_MARSHAL(ss << evalcode << funcid << pegstxid << srcpub << amount << account);        
-    return(EncodeTokenOpRet(tokenid,pubkeys,make_pair(OPRETID_PEGSDATA, vopret)));
+    return(EncodeTokenOpRetV1(tokenid,pubkeys, { vopret }));
 }
 
 uint8_t DecodePegsLiquidateOpRet(const CScript &scriptPubKey,uint256 &tokenid,uint256 &pegstxid,CPubKey &srcpub,int64_t &amount,std::pair <int64_t,int64_t> &account)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode; std::vector<CPubKey> pubkeys;
+    std::vector<vscript_t>  oprets;
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
 
-    if (DecodeTokenOpRet(scriptPubKey,tokenevalcode,tokenid,pubkeys, oprets)!=0 && GetOpretBlob(oprets, OPRETID_PEGSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(scriptPubKey,tokenid,pubkeys, oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -263,11 +266,11 @@ uint8_t DecodePegsLiquidateOpRet(const CScript &scriptPubKey,uint256 &tokenid,ui
 
 uint8_t DecodePegsOpRet(CTransaction tx,uint256& pegstxid,uint256& tokenid)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets; int32_t numvouts=tx.vout.size();
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode; std::vector<CPubKey> pubkeys;
+    std::vector<vscript_t>  oprets; int32_t numvouts=tx.vout.size();
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
     ImportProof proof; CTransaction burntx; std::vector<CTxOut> payouts; uint256 tmppegstxid; CPubKey srcpub; int64_t amount; std::pair<int64_t,int64_t> account;
 
-    if (DecodeTokenOpRet(tx.vout[numvouts-1].scriptPubKey,tokenevalcode,tokenid,pubkeys, oprets)!=0 && GetOpretBlob(oprets, OPRETID_PEGSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(tx.vout[numvouts-1].scriptPubKey,tokenid,pubkeys, oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -302,15 +305,15 @@ bool PegsExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction &
     numvouts = tx.vout.size();
     for (i=0; i<numvins; i++)
     {
-        //LogPrintf("vini.%d\n",i);
+        //fprintf(stderr,"vini.%d\n",i);
         if ( (*cp->ismyvin)(tx.vin[i].scriptSig) != 0 )
         {
-            //LogPrintf("vini.%d check mempool\n",i);
+            //fprintf(stderr,"vini.%d check mempool\n",i);
             if ( eval->GetTxUnconfirmed(tx.vin[i].prevout.hash,vinTx,hashBlock) == 0 )
                 return eval->Invalid("cant find vinTx");
             else
             {
-                //LogPrintf("vini.%d check hash and vout\n",i);
+                //fprintf(stderr,"vini.%d check hash and vout\n",i);
                 if ( hashBlock == zerohash )
                     return eval->Invalid("cant Pegs from mempool");
                 if ( (assetoshis= IsPegsvout(cp,vinTx,tx.vin[i].prevout.n)) != 0 )
@@ -320,13 +323,13 @@ bool PegsExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction &
     }
     for (i=0; i<numvouts; i++)
     {
-        //LogPrintf("i.%d of numvouts.%d\n",i,numvouts);
+        //fprintf(stderr,"i.%d of numvouts.%d\n",i,numvouts);
         if ( (assetoshis= IsPegsvout(cp,tx,i)) != 0 )
             outputs += assetoshis;
     }
     if ( inputs != outputs+txfee )
     {
-        LogPrintf("inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
+        fprintf(stderr,"inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
         return eval->Invalid("mismatched inputs != outputs + txfee");
     }
     else return(true);
@@ -351,10 +354,10 @@ bool PegsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, 
                 return eval->Invalid("illegal normal vini");
             }
         }
-        //LogPrintf("check amounts\n");
+        //fprintf(stderr,"check amounts\n");
         if ( PegsExactAmounts(cp,eval,tx,1,10000) == false )
         {
-            LogPrintf("Pegsget invalid amount\n");
+            fprintf(stderr,"Pegsget invalid amount\n");
             return false;
         }
         else
@@ -363,8 +366,8 @@ bool PegsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, 
             memcpy(hash,&txid,sizeof(hash));
             retval = PreventCC(eval,tx,preventCCvins,numvins,preventCCvouts,numvouts);
             if ( retval != 0 )
-                LogPrintf("Pegsget validated\n");
-            else LogPrintf("Pegsget invalid\n");
+                fprintf(stderr,"Pegsget validated\n");
+            else fprintf(stderr,"Pegsget invalid\n");
             return(retval);
         }
     }
@@ -522,7 +525,7 @@ int64_t PegsGetTokenPrice(uint256 tokenid)
     int64_t price; CTransaction tokentx; uint256 hashBlock; std::vector<uint16_t> exp;
     std::string name,desc; std::vector<uint8_t> vorigpubkey; int32_t numvouts;
 
-    if (myGetTransaction(tokenid,tokentx,hashBlock)!=0 && (numvouts=tokentx.vout.size())>0 && DecodeTokenCreateOpRet(tokentx.vout[numvouts-1].scriptPubKey,vorigpubkey,name,desc)=='c')
+    if (myGetTransaction(tokenid,tokentx,hashBlock)!=0 && (numvouts=tokentx.vout.size())>0 && DecodeTokenCreateOpRetV1(tokentx.vout[numvouts-1].scriptPubKey,vorigpubkey,name,desc)=='c')
     {
         std::vector<std::string> vexpr;
         SplitStr(desc, vexpr);
@@ -536,7 +539,7 @@ std::string PegsGetTokenName(uint256 tokenid)
 {
     CTransaction tokentx; uint256 hashBlock; std::string name,desc; std::vector<uint8_t> vorigpubkey; int32_t numvouts;
 
-    if (myGetTransaction(tokenid,tokentx,hashBlock)!=0 && (numvouts=tokentx.vout.size())>0 && DecodeTokenCreateOpRet(tokentx.vout[numvouts-1].scriptPubKey,vorigpubkey,name,desc)=='c')
+    if (myGetTransaction(tokenid,tokentx,hashBlock)!=0 && (numvouts=tokentx.vout.size())>0 && DecodeTokenCreateOpRetV1(tokentx.vout[numvouts-1].scriptPubKey,vorigpubkey,name,desc)=='c')
     {
         return (name);
     }
@@ -746,7 +749,7 @@ UniValue PegsFund(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tok
     }
     if (!found)
         CCERR_RESULT("pegscc",CCLOG_INFO, stream << "invalid tokenid " << tokenid.GetHex());
-    if ((balance=GetTokenBalance(mypk,tokenid))>=amount)
+    if ((balance=GetTokenBalance<TokensV1>(mypk,tokenid,false))>=amount)
     {
         PegsFindAccount(cp,mypk,pegstxid,tokenid,accounttxid,account);
         LOGSTREAM("pegscc",CCLOG_DEBUG2, stream << "current accounttxid=" << accounttxid.GetHex() << " [deposit=" << account.first << ",debt=" << account.second << "]" << std::endl);
@@ -765,7 +768,7 @@ UniValue PegsFund(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tok
         else funds=AddPegsInputs(cp,mtx,pegspk,CPubKey(),txfee+2*CC_MARKER_VALUE,3);
         if (funds>=txfee+2*CC_MARKER_VALUE)
         {
-            if ((tokenfunds=AddTokenCCInputs(cpTokens,mtx,mypk,tokenid,amount,64))>=amount)
+            if ((tokenfunds=AddTokenCCInputs<TokensV1>(cpTokens,mtx,mypk,tokenid,amount,64,false))>=amount)
             {
                 mtx.vout.push_back(MakeCC1of2vout(EVAL_PEGS,CC_MARKER_VALUE,pegspk,pegspk));
                 mtx.vout.push_back(MakeCC1of2vout(EVAL_PEGS,CC_MARKER_VALUE,mypk,pegspk));
@@ -1102,7 +1105,7 @@ UniValue PegsAccountHistory(const CPubKey& pk,uint256 pegstxid)
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     pegspk = GetUnspendable(cp,0);
     GetCCaddress1of2(cp,coinaddr,mypk,pegspk);
-    SetCCtxids(txids,coinaddr,true,EVAL_PEGS,pegstxid,0);
+    SetCCtxids(txids,coinaddr,true,EVAL_PEGS,0,pegstxid,0);
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     {
         txid = *it;

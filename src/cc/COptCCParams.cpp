@@ -15,6 +15,7 @@ EXAMPLE taken from Verus how to create scriptPubKey from COptCCParams class:
 EXAMPLE taken from Verus how to decode scriptPubKey from COptCCParams class:
 */
 
+/* unused:
 bool MakeGuardedOutput(CAmount value, CPubKey &dest, CTransaction &stakeTx, CTxOut &vout)
 {
     CCcontract_info *cp, C;
@@ -52,7 +53,7 @@ bool MakeGuardedOutput(CAmount value, CPubKey &dest, CTransaction &stakeTx, CTxO
         }
         vData.push_back(height);
 
-        COptCCParams ccp = COptCCParams(COptCCParams::VERSION, EVAL_STAKEGUARD, 1, 2, vPubKeys, vData);
+        COptCCParams ccp = COptCCParams(COptCCParams::VERSION_1, EVAL_STAKEGUARD, 1, 2, vPubKeys, vData);
 
         vout.scriptPubKey << ccp.AsVector() << OP_DROP;
         return true;
@@ -60,12 +61,13 @@ bool MakeGuardedOutput(CAmount value, CPubKey &dest, CTransaction &stakeTx, CTxO
     return false;
 }
 
+// unused:
 bool ValidateMatchingStake(const CTransaction &ccTx, uint32_t voutNum, const CTransaction &stakeTx, bool &cheating)
 {
     // an invalid or non-matching stake transaction cannot cheat
     cheating = false;
 
-    //LogPrintf("ValidateMatchingStake: ccTx.vin[0].prevout.hash: %s, ccTx.vin[0].prevout.n: %d\n", ccTx.vin[0].prevout.hash.GetHex().c_str(), ccTx.vin[0].prevout.n);
+    //printf("ValidateMatchingStake: ccTx.vin[0].prevout.hash: %s, ccTx.vin[0].prevout.n: %d\n", ccTx.vin[0].prevout.hash.GetHex().c_str(), ccTx.vin[0].prevout.n);
 
     if (ccTx.IsCoinBase())
     {
@@ -93,7 +95,7 @@ bool ValidateMatchingStake(const CTransaction &ccTx, uint32_t voutNum, const CTr
                         height = (height << 8) + ccp.vData[2][i];
                     }
                     // for debugging strange issue
-                    // LogPrintf("iterator: %d, height: %d, datalen: %d\n", i, height, dataLen);
+                    // printf("iterator: %d, height: %d, datalen: %d\n", i, height, dataLen);
 
                     if (utxo == uint256(ccp.vData[0]))
                     {
@@ -114,3 +116,4 @@ bool ValidateMatchingStake(const CTransaction &ccTx, uint32_t voutNum, const CTr
     }
     return false;
 }
+*/

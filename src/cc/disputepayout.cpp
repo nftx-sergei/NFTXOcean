@@ -87,7 +87,7 @@ bool Eval::DisputePayout(AppVM &vm, std::vector<uint8_t> params, const CTransact
         // The below means that if for any reason there is a draw, the first dispute wins
         else if (out.first == maxLength) {
             if (bestPayout != payoutHash) {
-                LogPrintf( "WARNING: VM has multiple solutions of same length\n");
+                fprintf(stderr, "WARNING: VM has multiple solutions of same length\n");
                 bestPayout = resultHash;
             }
         }

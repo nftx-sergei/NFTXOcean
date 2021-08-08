@@ -13,6 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 
+#include "CCtokens.h"
+#include "CCtokens_impl.h"
 #include "CCchannels.h"
 
 /*
@@ -102,7 +104,7 @@ CScript EncodeChannelsOpRet(uint8_t funcid,uint256 tokenid,uint256 opentxid,CPub
         std::vector<CPubKey> pks;
         pks.push_back(srcpub);
         pks.push_back(destpub);
-        return(EncodeTokenOpRet(tokenid,pks, std::make_pair(OPRETID_CHANNELSDATA,  vopret)));
+        return(EncodeTokenOpRetV1(tokenid,pks, {vopret}));
     }
     opret << OP_RETURN << vopret;
     return(opret);
@@ -110,11 +112,11 @@ CScript EncodeChannelsOpRet(uint8_t funcid,uint256 tokenid,uint256 opentxid,CPub
 
 uint8_t DecodeChannelsOpRet(const CScript &scriptPubKey, uint256 &tokenid, uint256 &opentxid, CPubKey &srcpub,CPubKey &destpub,int32_t &numpayments,int64_t &payment,uint256 &hashchain)
 {
-    std::vector<std::pair<uint8_t, vscript_t>>  oprets;
-    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f,tokenevalcode;
+    std::vector<vscript_t>  oprets;
+    std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f;
     std::vector<CPubKey> pubkeys;
 
-    if (DecodeTokenOpRet(scriptPubKey,tokenevalcode,tokenid,pubkeys,oprets)!=0 && GetOpretBlob(oprets, OPRETID_CHANNELSDATA, vOpretExtra) && tokenevalcode==EVAL_TOKENS && vOpretExtra.size()>0)
+    if (DecodeTokenOpRetV1(scriptPubKey,tokenid,pubkeys,oprets)!=0 && GetOpReturnCCBlob(oprets, vOpretExtra) && vOpretExtra.size()>0)
     {
         vopret=vOpretExtra;
     }
@@ -377,7 +379,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                         }
                         break;
                     default:
-                        LogPrintf("illegal channels funcid.(%c)\n",funcid);
+                        fprintf(stderr,"illegal channels funcid.(%c)\n",funcid);
                         return eval->Invalid("unexpected channels funcid");
                 }
             }
@@ -385,7 +387,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             retval = PreventCC(eval,tx,preventCCvins,numvins,preventCCvouts,numvouts);
             if ( retval != 0 )
                 LOGSTREAM("channels",CCLOG_INFO, stream << "Channels tx validated" << std::endl);
-            else LogPrintf("Channels tx invalid\n");
+            else fprintf(stderr,"Channels tx invalid\n");
             return(retval);
         }
     }
@@ -484,7 +486,7 @@ UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t n
     if (tokenid!=zeroid)
     {
         amount=AddNormalinputs(mtx,mypk,txfee+2*CC_MARKER_VALUE,5,pk.IsValid());
-        tokens=AddTokenCCInputs(cpTokens, mtx, mypk, tokenid, funds, 64);       
+        tokens=AddTokenCCInputs<TokensV1>(cpTokens, mtx, mypk, tokenid, funds, 64,0);       
     }
     else amount=AddNormalinputs(mtx,mypk,funds+txfee+2*CC_MARKER_VALUE,64,pk.IsValid());
     if (amount+tokens >= funds+txfee+2*CC_MARKER_VALUE)
@@ -690,7 +692,7 @@ UniValue ChannelsList(const CPubKey& pk)
     cp = CCinit(&C,EVAL_CHANNELS);
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     GetCCaddress(cp,myCCaddr,mypk);
-    SetCCtxids(txids,myCCaddr,true,EVAL_CHANNELS,zeroid,'O');
+    SetCCtxids(txids,myCCaddr,true,EVAL_CHANNELS,0,zeroid,'O');
     result.push_back(Pair("result","success"));
     result.push_back(Pair("name","Channels List"));
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
@@ -739,7 +741,7 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
             result.push_back(Pair("Amount (satoshi)",i64tostr(param1*param2)));
         }
         GetCCaddress(cp,CCaddr,mypk);
-        SetCCtxids(txids,CCaddr,true,EVAL_CHANNELS,channeltxid,0);                      
+        SetCCtxids(txids,CCaddr,true,EVAL_CHANNELS,0,channeltxid,0);                      
         for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
         {
             if (myGetTransaction(*it,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 0 &&

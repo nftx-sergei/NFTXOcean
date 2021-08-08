@@ -274,7 +274,7 @@ static bool ValidateBetTx(struct CCcontract_info *cp, Eval *eval, const CTransac
     for (auto vout : bettx.vout)
         if (vout.scriptPubKey.IsPayToCryptoCondition())  
             ccOutputs += vout.nValue;
-    CAmount normalInputs = TotalPubkeyNormalInputs(bettx, pk);
+    CAmount normalInputs = TotalPubkeyNormalInputs(eval, bettx, pk);
     if (normalInputs < ccOutputs) {
         return eval->Invalid("bettx normal inputs not signed with pubkey in opret");
     }
@@ -959,7 +959,7 @@ int32_t prices_syntheticvec(std::vector<uint16_t> &vec, std::vector<std::string>
     }
     if (depth != 0)
     {
-        LogPrintf( "prices_syntheticvec() depth.%d not empty\n", depth);
+        fprintf(stderr, "prices_syntheticvec() depth.%d not empty\n", depth);
         return(-5);
     }
     return(0);
@@ -1244,7 +1244,7 @@ int32_t prices_syntheticprofits(int64_t &costbasis, int32_t firstheight, int32_t
 
 
     if (height < firstheight) {
-        LogPrintf( "requested height is lower than bet firstheight.%d\n", height);
+        fprintf(stderr, "requested height is lower than bet firstheight.%d\n", height);
         return -1;
     }
 
@@ -1252,7 +1252,7 @@ int32_t prices_syntheticprofits(int64_t &costbasis, int32_t firstheight, int32_t
 
     if ((price = prices_syntheticprice(vec, height, minmax, leverage)) < 0)
     {
-        LogPrintf( "error getting synthetic price at height.%d\n", height);
+        fprintf(stderr, "error getting synthetic price at height.%d\n", height);
         return -1;
     }
 
@@ -1956,7 +1956,7 @@ UniValue PricesRekt(int64_t txfee, uint256 bettxid, int32_t rektheight)
         /// mtx.vout.push_back(MakeCC1vout(cp->evalcode, bettx.vout[2].nValue - myfee - txfee, pricespk));  // change
 
         // make some PoW to get txid=0x00.....00 to 'faucet' rekts
-        LogPrintf( "start PoW at %u\n", (uint32_t)time(NULL));
+        fprintf(stderr, "start PoW at %u\n", (uint32_t)time(NULL));
         uint32_t nonce = rand() & 0xfffffff;
         for (int i = 0; i<1000000; i++, nonce++)
         {
@@ -1974,13 +1974,13 @@ UniValue PricesRekt(int64_t txfee, uint256 bettxid, int32_t rektheight)
                 //if ((hash.bytes[0] & 0xff) == 0 && (hash.bytes[31] & 0xff) == 0)
                 if ((hash.begin()[0] & 0xff) == 0 && (hash.begin()[31] & 0xff) == 0)
                 {
-                    LogPrintf( "found valid txid after %d iterations %u\n", i, (uint32_t)time(NULL));
+                    fprintf(stderr, "found valid txid after %d iterations %u\n", i, (uint32_t)time(NULL));
                     return(prices_rawtxresult(result, rawtx, 0));
                 }
-                //LogPrintf("%02x%02x ",hash.bytes[0],hash.bytes[31]);
+                //fprintf(stderr,"%02x%02x ",hash.bytes[0],hash.bytes[31]);
             //}
         }
-        LogPrintf( "couldnt generate valid txid %u\n", (uint32_t)time(NULL));
+        fprintf(stderr, "couldnt generate valid txid %u\n", (uint32_t)time(NULL));
 
         result.push_back(Pair("result", "error"));
         result.push_back(Pair("error", "could not generate valid txid"));
@@ -2193,7 +2193,7 @@ UniValue PricesList(uint32_t filter, CPubKey mypk)
     };
 
 
-    SetCCtxids(addressIndex, cp->normaladdr, false);        // old normal marker
+    SetAddressIndexOutputs(addressIndex, cp->normaladdr, false);        // old normal marker
     for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it = addressIndex.begin(); it != addressIndex.end(); it++)
     {
         if( it->first.index == NVOUT_NORMALMARKER )
@@ -2201,7 +2201,7 @@ UniValue PricesList(uint32_t filter, CPubKey mypk)
     }
 
     /* for future when switch to cc marker only
-    SetCCtxids(addressIndexCC, cp->unspendableCCaddr, true);  // cc marker
+    SetAddressIndexOutputs(addressIndexCC, cp->unspendableCCaddr, true);  // cc marker
     for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it = addressIndexCC.begin(); it != addressIndexCC.end(); it++)
     {
         priceslist(it, 1);
@@ -2333,7 +2333,7 @@ void prices_getorderbook(std::map<std::string, std::vector<BetInfo> > & bookmatc
     cp = CCinit(&C, EVAL_PRICES);
 
     // add all bets:
-    SetCCtxids(addressIndex, cp->normaladdr, false);        // old normal marker
+    SetAddressIndexOutputs(addressIndex, cp->normaladdr, false);        // old normal marker
     for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it = addressIndex.begin(); it != addressIndex.end(); it++)
     {
         if (it->first.index == NVOUT_NORMALMARKER)

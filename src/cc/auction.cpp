@@ -40,15 +40,15 @@ bool AuctionExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransactio
     numvouts = tx.vout.size();
     for (i=0; i<numvins; i++)
     {
-        //LogPrintf("vini.%d\n",i);
+        //fprintf(stderr,"vini.%d\n",i);
         if ( (*cp->ismyvin)(tx.vin[i].scriptSig) != 0 )
         {
-            //LogPrintf("vini.%d check mempool\n",i);
+            //fprintf(stderr,"vini.%d check mempool\n",i);
             if ( eval->GetTxUnconfirmed(tx.vin[i].prevout.hash,vinTx,hashBlock) == 0 )
                 return eval->Invalid("cant find vinTx");
             else
             {
-                //LogPrintf("vini.%d check hash and vout\n",i);
+                //fprintf(stderr,"vini.%d check hash and vout\n",i);
                 if ( hashBlock == zerohash )
                     return eval->Invalid("cant Auction from mempool");
                 if ( (assetoshis= IsAuctionvout(cp,vinTx,tx.vin[i].prevout.n)) != 0 )
@@ -58,13 +58,13 @@ bool AuctionExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransactio
     }
     for (i=0; i<numvouts; i++)
     {
-        //LogPrintf("i.%d of numvouts.%d\n",i,numvouts);
+        //fprintf(stderr,"i.%d of numvouts.%d\n",i,numvouts);
         if ( (assetoshis= IsAuctionvout(cp,tx,i)) != 0 )
             outputs += assetoshis;
     }
     if ( inputs != outputs+COIN+txfee )
     {
-        LogPrintf("inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
+        fprintf(stderr,"inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
         return eval->Invalid("mismatched inputs != outputs + COIN + txfee");
     }
     else return(true);
@@ -81,19 +81,19 @@ bool AuctionValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
         return eval->Invalid("no vouts");
     else
     {
-        //LogPrintf("check vins\n");
+        //fprintf(stderr,"check vins\n");
         for (i=0; i<numvins; i++)
         {
             if ( IsCCInput(tx.vin[0].scriptSig) == 0 )
             {
-                LogPrintf("Auctionget invalid vini\n");
+                fprintf(stderr,"Auctionget invalid vini\n");
                 return eval->Invalid("illegal normal vini");
             }
         }
-        //LogPrintf("check amounts\n");
+        //fprintf(stderr,"check amounts\n");
         if ( AuctionExactAmounts(cp,eval,tx,1,10000) == false )
         {
-            LogPrintf("Auctionget invalid amount\n");
+            fprintf(stderr,"Auctionget invalid amount\n");
             return false;
         }
         else
@@ -108,8 +108,8 @@ bool AuctionValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
                 return eval->Invalid("invalid Auction output");
             retval = PreventCC(eval,tx,preventCCvins,numvins,preventCCvouts,numvouts);
             if ( retval != 0 )
-                LogPrintf("Auctionget validated\n");
-            else LogPrintf("Auctionget invalid\n");
+                fprintf(stderr,"Auctionget validated\n");
+            else fprintf(stderr,"Auctionget invalid\n");
             return(retval);
         }
     }
@@ -164,8 +164,8 @@ std::string AuctionBid(uint64_t txfee,uint256 itemhash,int64_t amount)
         if ( CCchange != 0 )
             mtx.vout.push_back(MakeCC1vout(EVAL_AUCTION,CCchange,Auctionpk));
         mtx.vout.push_back(CTxOut(nValue,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret));
-    } else LogPrintf("cant find Auction inputs\n");
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret));
+    } else fprintf(stderr,"cant find Auction inputs\n");
     return("");
 }
 
@@ -185,8 +185,8 @@ std::string AuctionDeliver(uint64_t txfee,uint256 itemhash,uint256 bidtxid)
         if ( CCchange != 0 )
             mtx.vout.push_back(MakeCC1vout(EVAL_AUCTION,CCchange,Auctionpk));
         mtx.vout.push_back(CTxOut(nValue,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret));
-    } else LogPrintf("cant find Auction inputs\n");
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret));
+    } else fprintf(stderr,"cant find Auction inputs\n");
     return("");
 }
 

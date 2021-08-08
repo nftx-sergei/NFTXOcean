@@ -45,12 +45,12 @@ bool FSMExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
         //fprintf(stderr,"vini.%d\n",i);
         if ( (*cp->ismyvin)(tx.vin[i].scriptSig) != 0 )
         {
-            //LogPrintf("vini.%d check mempool\n",i);
+            //fprintf(stderr,"vini.%d check mempool\n",i);
             if ( eval->GetTxUnconfirmed(tx.vin[i].prevout.hash,vinTx,hashBlock) == 0 )
                 return eval->Invalid("cant find vinTx");
             else
             {
-                //LogPrintf("vini.%d check hash and vout\n",i);
+                //fprintf(stderr,"vini.%d check hash and vout\n",i);
                 if ( hashBlock == zerohash )
                     return eval->Invalid("cant FSM from mempool");
                 if ( (assetoshis= IsFSMvout(cp,vinTx,tx.vin[i].prevout.n)) != 0 )
@@ -60,13 +60,13 @@ bool FSMExactAmounts(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
     }
     for (i=0; i<numvouts; i++)
     {
-        //LogPrintf("i.%d of numvouts.%d\n",i,numvouts);
+        //fprintf(stderr,"i.%d of numvouts.%d\n",i,numvouts);
         if ( (assetoshis= IsFSMvout(cp,tx,i)) != 0 )
             outputs += assetoshis;
     }
     if ( inputs != outputs+COIN+txfee )
     {
-        LogPrintf("inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
+        fprintf(stderr,"inputs %llu vs outputs %llu\n",(long long)inputs,(long long)outputs);
         return eval->Invalid("mismatched inputs != outputs + COIN + txfee");
     }
     else return(true);
@@ -83,19 +83,19 @@ bool FSMValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, u
         return eval->Invalid("no vouts");
     else
     {
-        //LogPrintf("check vins\n");
+        //fprintf(stderr,"check vins\n");
         for (i=0; i<numvins; i++)
         {
             if ( IsCCInput(tx.vin[0].scriptSig) == 0 )
             {
-                LogPrintf("fsmget invalid vini\n");
+                fprintf(stderr,"fsmget invalid vini\n");
                 return eval->Invalid("illegal normal vini");
             }
         }
-        //LogPrintf("check amounts\n");
+        //fprintf(stderr,"check amounts\n");
         if ( FSMExactAmounts(cp,eval,tx,1,10000) == false )
         {
-            LogPrintf("fsmget invalid amount\n");
+            fprintf(stderr,"fsmget invalid amount\n");
             return false;
         }
         else
@@ -110,8 +110,8 @@ bool FSMValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, u
                 return eval->Invalid("invalid fsm output");
             retval = PreventCC(eval,tx,preventCCvins,numvins,preventCCvouts,numvouts);
             if ( retval != 0 )
-                LogPrintf("fsmget validated\n");
-            else LogPrintf("fsmget invalid\n");
+                fprintf(stderr,"fsmget validated\n");
+            else fprintf(stderr,"fsmget invalid\n");
             return(retval);
         }
     }
@@ -171,8 +171,8 @@ std::string FSMCreate(uint64_t txfee,std::string name,std::string states)
         if ( CCchange != 0 )
             mtx.vout.push_back(MakeCC1vout(EVAL_FSM,CCchange,fsmpk));
         mtx.vout.push_back(CTxOut(nValue,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret));
-    } else LogPrintf("cant find fsm inputs\n");
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret));
+    } else fprintf(stderr,"cant find fsm inputs\n");
     return("");
 }
 

@@ -2330,8 +2330,8 @@ void randombytes(unsigned char *x,long xlen)
         {
             int32_t j;
             for (j=0; j<i; j++)
-                LogPrintf("%02x ",x[j]);
-            LogPrintf("-> %p\n",x);
+                printf("%02x ",x[j]);
+            printf("-> %p\n",x);
         }
         x += i;
         xlen -= i;
@@ -2743,16 +2743,16 @@ static int64_t average(int64_t *t, size_t tlen)
 static void print_results(const char *s, int64_t *t, size_t tlen)
 {
     size_t i;
-    LogPrintf("%s", s);
+    printf("%s", s);
     for(i=0;i<tlen-1;i++)
     {
         t[i] = t[i+1] - t[i];
-        //LogPrintf("%lld ", (long long)t[i]);
+        //fprintf(stderr,"%lld ", (long long)t[i]);
     }
-    LogPrintf("\n");
-    LogPrintf("median: %lld\n", (long long)median(t, tlen));
-    LogPrintf("average: %lld\n", (long long)average(t, tlen-1));
-    LogPrintf("\n");
+    printf("\n");
+    printf("median: %lld\n", (long long)median(t, tlen));
+    printf("average: %lld\n", (long long)average(t, tlen-1));
+    printf("\n");
 }
 
 int32_t main(void)
@@ -2808,18 +2808,18 @@ int32_t main(void)
         tverify[i] = cpucycles_stop() - tverify[i] - timing_overhead;
 #endif
         if(ret) {
-            LogPrintf("Verification failed\n");
+            printf("Verification failed\n");
             return -1;
         }
         
         if(mlen != MLEN) {
-            LogPrintf("Message lengths don't match\n");
+            printf("Message lengths don't match\n");
             return -1;
         }
         
         for(j = 0; j < mlen; ++j) {
             if(m[j] != m2[j]) {
-                LogPrintf("Messages don't match\n");
+                printf("Messages don't match\n");
                 return -1;
             }
         }
@@ -2978,17 +2978,17 @@ int32_t dilithium_Qmsghash(uint8_t *msg,CTransaction tx,int32_t numvouts,std::ve
     {
         vintxids.push_back(tx.vin[i].prevout.hash);
         vinprevns.push_back(tx.vin[i].prevout.n);
-        //LogPrintf("%s/v%d ",tx.vin[i].prevout.hash.GetHex().c_str(),tx.vin[i].prevout.n);
+        //fprintf(stderr,"%s/v%d ",tx.vin[i].prevout.hash.GetHex().c_str(),tx.vin[i].prevout.n);
     }
     for (i=0; i<numvouts; i++)
     {
         //char destaddr[64];
         //Getscriptaddress(destaddr,tx.vout[i].scriptPubKey);
-        //LogPrintf("%s %.8f ",destaddr,(double)tx.vout[i].nValue/COIN);
+        //fprintf(stderr,"%s %.8f ",destaddr,(double)tx.vout[i].nValue/COIN);
         vouts.push_back(tx.vout[i]);
     }
     data << E_MARSHAL(ss << vintxids << vinprevns << vouts << voutpubtxids);
-    //LogPrintf("numvins.%d numvouts.%d size of data.%d\n",numvins,numvouts,(int32_t)data.size());
+    //fprintf(stderr,"numvins.%d numvouts.%d size of data.%d\n",numvins,numvouts,(int32_t)data.size());
     hash = Hash(data.begin(),data.end());
     memcpy(msg,&hash,sizeof(hash));
     return(0);
@@ -3389,7 +3389,7 @@ int64_t dilithium_inputs(struct CCcontract_info *cp,CMutableTransaction &mtx,CPu
     {
         txid = it->first.txhash;
         vout = (int32_t)it->first.index;
-        //char str[65]; LogPrintf("%s check %s/v%d %.8f vs %.8f\n",coinaddr,uint256_str(str,txid),vout,(double)it->second.satoshis/COIN,(double)threshold/COIN);
+        //char str[65]; fprintf(stderr,"%s check %s/v%d %.8f vs %.8f\n",coinaddr,uint256_str(str,txid),vout,(double)it->second.satoshis/COIN,(double)threshold/COIN);
         if ( it->second.satoshis < threshold || it->second.satoshis == DILITHIUM_TXFEE )
             continue;
         if ( myGetTransaction(txid,vintx,hashBlock) != 0 && (numvouts= vintx.vout.size()) > 1 )
@@ -3406,8 +3406,8 @@ int64_t dilithium_inputs(struct CCcontract_info *cp,CMutableTransaction &mtx,CPu
                     if ( (total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs) )
                         break;
                 }
-            } //else LogPrintf("nValue %.8f too small or already spent in mempool\n",(double)nValue/COIN);
-        } else LogPrintf("couldnt get tx\n");
+            } //else fprintf(stderr,"nValue %.8f too small or already spent in mempool\n",(double)nValue/COIN);
+        } else fprintf(stderr,"couldnt get tx\n");
     }
     return(totalinputs);
 }
@@ -3473,8 +3473,8 @@ UniValue dilithium_Qsend(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
             tx = mtx;
             dilithium_Qmsghash(msg,tx,(int32_t)voutpubtxids.size(),voutpubtxids);
             //for (i=0; i<32; i++)
-            //    LogPrintf("%02x",msg[i]);
-            //LogPrintf(" msg\n");
+            //    fprintf(stderr,"%02x",msg[i]);
+            //fprintf(stderr," msg\n");
             sig.resize(32+CRYPTO_BYTES);
             if ( dilithium_bigpubget(handle,destpub33,pk2,mypubtxid) < 0 )
                 retstr = (char *)"couldnt get bigpub";
@@ -3549,11 +3549,11 @@ bool dilithium_Qvalidate(struct CCcontract_info *cp,int32_t height,Eval *eval,co
                 else if ( mlen != 32 || memcmp(msg,msg2,32) != 0 )
                 {
                     for (i=0; i<32; i++)
-                        LogPrintf("%02x",msg[i]);
-                    LogPrintf(" vs ");
+                        fprintf(stderr,"%02x",msg[i]);
+                    fprintf(stderr," vs ");
                     for (i=0; i<mlen; i++)
-                        LogPrintf("%02x",msg2[i]);
-                    LogPrintf("mlen.%d\n",mlen);
+                        fprintf(stderr,"%02x",msg2[i]);
+                    fprintf(stderr,"mlen.%d\n",mlen);
                     return eval->Invalid("failed dilithium msg verify");
                 }
                 else return true;
@@ -3586,7 +3586,7 @@ void dilithium_handleinit(struct CCcontract_info *cp)
     pthread_mutex_init(&DILITHIUM_MUTEX,NULL);
     dilithiumpk = GetUnspendable(cp,0);
     GetCCaddress(cp,CCaddr,dilithiumpk);
-    SetCCtxids(txids,CCaddr,true,cp->evalcode,zeroid,'R');
+    SetCCtxids(txids,CCaddr,true,cp->evalcode,0,zeroid,'R');
     for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
     {
         txid = *it;
@@ -3599,8 +3599,8 @@ void dilithium_handleinit(struct CCcontract_info *cp)
                     if ( hashstr->destpubtxid != txid )
                     {
                         if ( hashstr->destpubtxid != zeroid )
-                            LogPrintf("overwriting %s %s with %s\n",handle.c_str(),hashstr->destpubtxid.GetHex().c_str(),txid.GetHex().c_str());
-                        LogPrintf("%s <- %s\n",handle.c_str(),txid.GetHex().c_str());
+                            fprintf(stderr,"overwriting %s %s with %s\n",handle.c_str(),hashstr->destpubtxid.GetHex().c_str(),txid.GetHex().c_str());
+                        fprintf(stderr,"%s <- %s\n",handle.c_str(),txid.GetHex().c_str());
                         hashstr->destpubtxid = txid;
                     }
                 }
@@ -3677,7 +3677,7 @@ bool dilithium_Rvalidate(struct CCcontract_info *cp,int32_t height,Eval *eval,co
                 if ( oldpub33 == pub33 )
                 {
                     hashstr->destpubtxid = txid;
-                    LogPrintf("ht.%d %s <- %s\n",height,handle.c_str(),txid.GetHex().c_str());
+                    fprintf(stderr,"ht.%d %s <- %s\n",height,handle.c_str(),txid.GetHex().c_str());
                     return(true);
                 }
             }
