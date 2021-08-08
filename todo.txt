@@ -43,3 +43,14 @@ cd src
 7. https://github.com/zcash/zcash/pull/5012 - Bitcoin 0.15 locking PRs #5012 (included 3)
 
 8. https://github.com/zcash/zcash/pull/5017 - Bitcoin 0.16 locking PRs #5017
+
+Tokel TODO:
+-----------
+
+Based on:
+
+Repo  : https://github.com/komodoplatform/komodo
+Branch: tokel
+Commit: 0accf370d99737008bfa11ffe7967e5ab0d17d75 (HEAD -> tokel, origin/tokel)
+
+1. Remove komodo_is_vSolutionsFixActive ? // not used for tokel chains ???
