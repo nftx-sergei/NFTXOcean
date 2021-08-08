@@ -400,16 +400,18 @@ bool NSPV_inmempool(uint256 txid);
 
 bool myIsutxo_spentinmempool(uint256 &spenttxid,int32_t &spentvini,uint256 txid,int32_t vout)
 {
-    int32_t vini = 0;
     if ( KOMODO_NSPV_SUPERLITE )
         return(NSPV_spentinmempool(spenttxid,spentvini,txid,vout));
+
+    /* old full search impl:
     BOOST_FOREACH(const CTxMemPoolEntry &e,mempool.mapTx)
     {
         const CTransaction &tx = e.GetTx();
         const uint256 &hash = tx.GetHash();
+        int32_t vini = 0;
         BOOST_FOREACH(const CTxIn &txin,tx.vin)
         {
-            //LogPrintf("%s/v%d ",uint256_str(str,txin.prevout.hash),txin.prevout.n);
+            //fprintf(stderr,"%s/v%d ",uint256_str(str,txin.prevout.hash),txin.prevout.n);
             if ( txin.prevout.n == vout && txin.prevout.hash == txid )
             {
                 spenttxid = hash;
@@ -418,9 +420,21 @@ bool myIsutxo_spentinmempool(uint256 &spenttxid,int32_t &spentvini,uint256 txid,
             }
             vini++;
         }
-        //LogPrintf("are vins for %s\n",uint256_str(str,hash));
+        //fprintf(stderr,"are vins for %s\n",uint256_str(str,hash));
     }
     return(false);
+    */
+
+    // indexed impl: 
+    CSpentIndexKey key { txid, (uint32_t)vout };
+    CSpentIndexValue value;
+    if (mempool.getSpentIndex(key, value))  {
+        spenttxid = value.txid;
+        spentvini = value.inputIndex;
+        return true;
+    }
+    else
+        return false;
 }
 
 bool mytxid_inmempool(uint256 txid)
