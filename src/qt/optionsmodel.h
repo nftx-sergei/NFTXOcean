@@ -15,6 +15,8 @@ class QNetworkProxy;
 #endif
 QT_END_NAMESPACE
 
+static const bool DEFAULT_CHECK_FOR_UPDATES = true;
+
 /** Interface from Qt to configuration data structure for Komodo client.
    To Qt, the options are presented as a list with the different options
    laid out vertically.
@@ -48,7 +50,8 @@ public:
         DatabaseCache,          // int
         SpendZeroConfChange,    // bool
         Listen,                 // bool
-        OptionIDRowCount,
+        CheckForUpdates,        // bool
+        OptionIDRowCount
     };
 
     void Init(bool resetSettings = false);
@@ -71,6 +74,7 @@ public:
     #endif
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
+    bool getCheckForUpdates() const { return fCheckForUpdates; }
 
     /* Restart flag helper */
     void setRestartRequired(bool fRequired);
@@ -87,6 +91,7 @@ private:
     bool fCoinControlFeatures;
     /* settings that were overridden by command-line */
     QString strOverriddenByCommandLine;
+    bool fCheckForUpdates;
 
     // Add option to list of GUI options overridden through command line/config file
     void addOverriddenOption(const std::string &option);

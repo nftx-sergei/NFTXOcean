@@ -21,6 +21,7 @@
 #include "platformstyle.h"
 #include "rpcconsole.h"
 #include "utilitydialog.h"
+#include "versionchecker.h"
 
 #ifdef ENABLE_WALLET
 #include "walletframe.h"
@@ -122,6 +123,7 @@ KomodoOceanGUI::KomodoOceanGUI(const PlatformStyle *_platformStyle, const Networ
     rpcConsole(0),
     helpMessageDialog(0),
     modalOverlay(0),
+    komodoVersionChecker(0),
     prevBlocks(0),
     spinnerFrame(0),
     platformStyle(_platformStyle)
@@ -251,6 +253,7 @@ KomodoOceanGUI::KomodoOceanGUI(const PlatformStyle *_platformStyle, const Networ
     connect(connectionsControl, SIGNAL(clicked(QPoint)), this, SLOT(toggleNetworkActive()));
 
     modalOverlay = new ModalOverlay(this->centralWidget());
+    komodoVersionChecker = new KomodoVersionChecker(this);
 #ifdef ENABLE_WALLET
     if(enableWallet) {
         connect(walletFrame, SIGNAL(requestedSyncWarningInfo()), this, SLOT(showModalOverlay()));
@@ -495,6 +498,14 @@ void KomodoOceanGUI::setClientModel(ClientModel *_clientModel)
     this->clientModel = _clientModel;
     if(_clientModel)
     {
+        // Check for updates
+        if(_clientModel->getOptionsModel()->getCheckForUpdates() && komodoVersionChecker->newVersionAvailable())
+        {
+            QString link = QString("<a href=%1>%2</a>").arg(KOMODO_LATEST_RELEASE, KOMODO_LATEST_RELEASE);
+            QString message(tr("New version of " PACKAGE_NAME " wallet is available on the " PACKAGE_NAME " source code repository: <br /> %1. <br />It is recommended to download it and update this application").arg(link));
+            QMessageBox::information(this, tr("Check for updates"), message);
+        }
+
         // Create system tray menu (or setup the dock menu) that late to prevent users from calling actions,
         // while the client has not yet fully loaded
         createTrayIconMenu();
