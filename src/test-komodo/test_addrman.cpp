@@ -854,14 +854,14 @@ namespace TestAddrmanTests {
         addrman_noasmap.Add(addr2, default_source);
         std::pair<int, int> bucketAndEntry_noasmap_addr1 = addrman_noasmap.GetBucketAndEntry(addr1);
         std::pair<int, int> bucketAndEntry_noasmap_addr2 = addrman_noasmap.GetBucketAndEntry(addr2);
-        ASSERT_TRUE(bucketAndEntry_noasmap_addr1.first != bucketAndEntry_noasmap_addr2.first);
-        ASSERT_TRUE(bucketAndEntry_noasmap_addr1.second != bucketAndEntry_noasmap_addr2.second);
+        EXPECT_TRUE(bucketAndEntry_noasmap_addr1.first != bucketAndEntry_noasmap_addr2.first);
+        EXPECT_TRUE(bucketAndEntry_noasmap_addr1.second != bucketAndEntry_noasmap_addr2.second);
         stream << addrman_noasmap;
         stream >> addrman_asmap1;
         std::pair<int, int> bucketAndEntry_asmap1_deser_addr1 = addrman_asmap1.GetBucketAndEntry(addr1);
         std::pair<int, int> bucketAndEntry_asmap1_deser_addr2 = addrman_asmap1.GetBucketAndEntry(addr2);
-        ASSERT_TRUE(bucketAndEntry_asmap1_deser_addr1.first == bucketAndEntry_asmap1_deser_addr2.first);
-        ASSERT_TRUE(bucketAndEntry_asmap1_deser_addr1.second != bucketAndEntry_asmap1_deser_addr2.second);
+        EXPECT_TRUE(bucketAndEntry_asmap1_deser_addr1.first == bucketAndEntry_asmap1_deser_addr2.first);
+        EXPECT_TRUE(bucketAndEntry_asmap1_deser_addr1.second != bucketAndEntry_asmap1_deser_addr2.second);
     }
 
 }
