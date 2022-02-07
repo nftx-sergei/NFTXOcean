@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace TestNetTests {
 
@@ -17,7 +18,7 @@ namespace TestNetTests {
     class CChildCService : public CService {
         public:
             explicit CChildCService(const CService &ipIn) : CService(ipIn) {};
-            uint32_t GetScopeId() { return scopeId; }
+            uint32_t GetScopeId() { return m_scope_id; }
     };
 
     // https://github.com/bitcoin/bitcoin/pull/14728 - fix uninitialized read when stringifying an addrLocal
@@ -79,5 +80,32 @@ namespace TestNetTests {
         // suppress no-checks-run warning; if this test fails, it's by triggering a sanitizer
         ASSERT_TRUE(1);
 
+    }
+
+    TEST(TestNetTests, cnetaddr_basic_scoped_link_local) {
+
+        CNetAddr addr;
+        std::vector<CNetAddr> vIP;
+        // IPv6, scoped/link-local. See https://tools.ietf.org/html/rfc4007
+        // We support non-negative decimal integers (uint32_t) as zone id indices.
+        // Test with a fairly-high value, e.g. 32, to avoid locally reserved ids.
+        const std::string link_local{"fe80::1"};
+        const std::string scoped_addr{link_local + "%32"};
+        ASSERT_TRUE(LookupHost(scoped_addr.c_str(), vIP, false));
+        addr = vIP[0];
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+        //EXPECT_TRUE(!addr.IsBindAny());
+        const std::string addr_str{addr.ToString()};
+        EXPECT_TRUE(addr_str == scoped_addr || addr_str == "fe80:0:0:0:0:0:0:1");
+        // The fallback case "fe80:0:0:0:0:0:0:1" is needed for macOS 10.14/10.15 and (probably) later.
+        // Test that the delimiter "%" and default zone id of 0 can be omitted for the default scope.
+        const std::string link_local_zone{link_local + "%0"};
+        ASSERT_TRUE(LookupHost(link_local_zone.c_str(), vIP, false));
+        addr = vIP[0];
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+        //EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), link_local);
     }
 }

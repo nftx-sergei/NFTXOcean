@@ -59,7 +59,11 @@ class CNetAddr
 {
     protected:
         unsigned char ip[16]; // in network byte order
-        uint32_t scopeId{0}; // for scoped/link-local ipv6 addresses
+        /**
+         * Scope id if scoped/link-local IPV6 address.
+         * See https://tools.ietf.org/html/rfc4007
+         */
+        uint32_t m_scope_id{0};
 
     public:
         CNetAddr();
