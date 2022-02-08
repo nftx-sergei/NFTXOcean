@@ -264,7 +264,25 @@ class CService : public CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action) {
-            READWRITE(FLATDATA(ip));
+            /*
+                To successfully unserialize CService and pass all checks, we should be sure that Unserialize
+                method is called for parent class CNetAddr and call-stack will look like: CService::Unserialize ->
+                CNetAddr::Unserialize -> CNetAddr::SetLegacyIPv6. Most important in this chain is call to SetLegacyIPv6,
+                bcz it sets m_net == NET_IPV4 for IPv4 addresses. Without call to SetLegacyIPv6 there is a possibility
+                of unserializing address 250.2.1.1 as NET_IPV6 by default (0000:0000:0000:0000:0000:ffff:fa02:0101)
+                and this will cause issues with addrman_serialization unit-test. Other variant is to check ser_action
+                and in case of ser_action == CSerActionUnserialize set the m_net to correct value, like:
+
+                READWRITE(ip); // direct arrays (de)serialization is alrady supported, so FLATDATA(ip) don't needed
+                if (ser_action.ForRead()) {
+                    unsigned char ip_temp[sizeof(ip)];
+                    memcpy(ip_temp, ip, sizeof(ip));
+                    SetLegacyIPv6(ip_temp);
+                }
+            */
+
+            READWRITE(*(CNetAddr*)this);
+
             unsigned short portN = htons(port);
             READWRITE(FLATDATA(portN));
             if (ser_action.ForRead())
