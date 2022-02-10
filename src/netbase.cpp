@@ -225,6 +225,49 @@ bool LookupHost(const char *pszName, std::vector<CNetAddr>& vIP, unsigned int nM
     return LookupIntern(strHost.c_str(), vIP, nMaxSolutions, fAllowLookup);
 }
 
+/**
+ * Resolve a host string to its corresponding network addresses.
+ *
+ * @param name    The string representing a host. Could be a name or a numerical
+ *                IP address (IPv6 addresses in their bracketed form are
+ *                allowed).
+ * @param[out] vIP The resulting network addresses to which the specified host
+ *                 string resolved.
+ *
+ * @returns Whether or not the specified host string successfully resolved to
+ *          any resulting network addresses.
+ *
+ * @see Lookup(const char *, std::vector<CService>&, int, bool, unsigned int)
+ *      for additional parameter descriptions.
+ */
+bool LookupHost(const std::string& name, std::vector<CNetAddr>& vIP, unsigned int nMaxSolutions, bool fAllowLookup)
+{
+    std::string strHost = name;
+    if (strHost.empty())
+        return false;
+    if (strHost.front() == '[' && strHost.back() == ']') {
+        strHost = strHost.substr(1, strHost.size() - 2);
+    }
+
+    return LookupIntern(strHost.c_str(), vIP, nMaxSolutions, fAllowLookup);
+}
+
+ /**
+ * Resolve a host string to its first corresponding network address.
+ *
+ * @see LookupHost(const std::string&, std::vector<CNetAddr>&, unsigned int, bool) for
+ *      additional parameter descriptions.
+ */
+bool LookupHost(const std::string& name, CNetAddr& addr, bool fAllowLookup)
+{
+    std::vector<CNetAddr> vIP;
+    LookupHost(name, vIP, 1, fAllowLookup);
+    if(vIP.empty())
+        return false;
+    addr = vIP.front();
+    return true;
+}
+
 bool Lookup(const char *pszName, std::vector<CService>& vAddr, int portDefault, bool fAllowLookup, unsigned int nMaxSolutions)
 {
     if (pszName[0] == 0)
@@ -1469,6 +1512,27 @@ CSubNet::CSubNet():
     memset(netmask, 0, sizeof(netmask));
 }
 
+CSubNet::CSubNet(const CNetAddr& addr, uint8_t mask) : CSubNet()
+{
+    valid = (addr.IsIPv4() && mask <= ADDR_IPV4_SIZE * 8) ||
+            (addr.IsIPv6() && mask <= ADDR_IPV6_SIZE * 8);
+    if (!valid) {
+        return;
+    }
+
+    assert(mask <= sizeof(netmask) * 8);
+
+    network = addr;
+
+    uint8_t n = mask;
+    for (size_t i = 0; i < network.m_addr.size(); ++i) {
+        const uint8_t bits = n < 8 ? n : 8;
+        netmask[i] = (uint8_t)((uint8_t)0xFF << (8 - bits)); // Set first bits.
+        network.m_addr[i] &= netmask[i]; // Normalize network according to netmask.
+        n -= bits;
+    }
+}
+
 /**
  * @returns The number of 1-bits in the prefix of the specified subnet mask. If
  *          the specified subnet mask is not a valid one, -1.
@@ -1489,78 +1553,49 @@ static inline int NetmaskBits(uint8_t x)
     }
 }
 
-/*
-    TODO: double check CSubNet::CSubNet(...)
-
-    NB!: Check CSubNet accordingly:
-
-        1. Still use CSubNet::netmask[] of fixed 16 bytes
-        2. But use the first 4 for IPv4 (not the last 4). 
-        3. Do not accept invalid netmasks that have 0-bits followed by 1-bits and only allow subnetting for IPv4 and IPv6.
-*/
-
-CSubNet::CSubNet(const std::string &strSubnet, bool fAllowLookup)
+CSubNet::CSubNet(const CNetAddr& addr, const CNetAddr& mask) : CSubNet()
 {
-    size_t slash = strSubnet.find_last_of('/');
-    std::vector<CNetAddr> vIP;
-
-    valid = true;
-    // Default to /32 (IPv4) or /128 (IPv6), i.e. match single address
-    memset(netmask, 255, sizeof(netmask));
-
-    std::string strAddress = strSubnet.substr(0, slash);
-    if (LookupHost(strAddress.c_str(), vIP, 1, fAllowLookup))
-    {
-        network = vIP[0];
-        if (slash != strSubnet.npos)
-        {
-            std::string strNetmask = strSubnet.substr(slash + 1);
-            int32_t n;
-            if (ParseInt32(strNetmask, &n)) // If valid number, assume /24 symtex
-            {
-                if(n >= 0 && n <= (network.IsIPv4() ? 32 : 128)) // Only valid if in range of bits of address (IPv4 - 0..32, IPv6 - 0..128)
-                {
-                    // Clear needed bits (not so beautiful, but works)
-                    if (network.IsIPv4()) {
-                        n += 96;
-                        for (; n < 128; ++n)
-                            netmask[(n - 96) >>3] &= ~(1<<(7-(n&7)));
-                    } else if (network.IsIPv6()) {
-                        for (; n < 128; ++n)
-                            netmask[n>>3] &= ~(1<<(7-(n&7)));
-                    } else {
-                        assert(false);
-                    };
-                }
-                else
-                {
-                    valid = false;
-                }
-            }
-            else // If not a valid number, try full netmask syntax
-            {
-                if (LookupHost(strNetmask.c_str(), vIP, 1, false)) // Never allow lookup for netmask
-                {
-                    for (size_t x = 0; x < network.m_addr.size(); ++x) {
-                       netmask[x] = vIP[0].m_addr[x];
-                    }
-                }
-                else
-                {
-                    valid = false;
-                }
-            }
+    valid = (addr.IsIPv4() || addr.IsIPv6()) && addr.m_net == mask.m_net;
+    if (!valid) {
+        return;
+    }
+    // Check if `mask` contains 1-bits after 0-bits (which is an invalid netmask).
+    bool zeros_found = false;
+    for (auto b : mask.m_addr) {
+        const int num_bits = NetmaskBits(b);
+        if (num_bits == -1 || (zeros_found && num_bits != 0)) {
+            valid = false;
+            return;
+        }
+        if (num_bits < 8) {
+            zeros_found = true;
         }
     }
-    else
-    {
-        valid = false;
-    }
+
+    assert(mask.m_addr.size() <= sizeof(netmask));
+
+    memcpy(netmask, mask.m_addr.data(), mask.m_addr.size());
+
+    network = addr;
 
     // Normalize network according to netmask
     for (size_t x = 0; x < network.m_addr.size(); ++x) {
         network.m_addr[x] &= netmask[x];
     }
+}
+
+CSubNet::CSubNet(const CNetAddr& addr) : CSubNet()
+{
+    valid = addr.IsIPv4() || addr.IsIPv6();
+    if (!valid) {
+        return;
+    }
+
+    assert(addr.m_addr.size() <= sizeof(netmask));
+
+    memset(netmask, 0xFF, addr.m_addr.size());
+
+    network = addr;
 }
 
 /**
@@ -1609,6 +1644,55 @@ bool operator==(const CSubNet& a, const CSubNet& b)
 bool operator<(const CSubNet& a, const CSubNet& b)
 {
     return (a.network < b.network || (a.network == b.network && memcmp(a.netmask, b.netmask, 16) < 0));
+}
+
+/**
+ * Parse and resolve a specified subnet string into the appropriate internal
+ * representation.
+ *
+ * @param strSubnet A string representation of a subnet of the form `network
+ *                address [ "/", ( CIDR-style suffix | netmask ) ]`(e.g.
+ *                `2001:db8::/32`, `192.0.2.0/255.255.255.0`, or `8.8.8.8`).
+ * @param ret The resulting internal representation of a subnet.
+ *
+ * @returns Whether the operation succeeded or not.
+ */
+bool LookupSubNet(const std::string& strSubnet, CSubNet& ret)
+{
+    size_t slash = strSubnet.find_last_of('/');
+    std::vector<CNetAddr> vIP;
+
+    std::string strAddress = strSubnet.substr(0, slash);
+    // TODO: Use LookupHost(const std::string&, CNetAddr&, bool) instead to just get
+    //       one CNetAddr.
+    if (LookupHost(strAddress, vIP, 1, false))
+    {
+        CNetAddr network = vIP[0];
+        if (slash != strSubnet.npos)
+        {
+            std::string strNetmask = strSubnet.substr(slash + 1);
+            uint8_t n;
+            if (ParseUInt8(strNetmask, &n)) {
+                // If valid number, assume CIDR variable-length subnet masking
+                ret = CSubNet(network, n);
+                return ret.IsValid();
+            }
+            else // If not a valid number, try full netmask syntax
+            {
+                // Never allow lookup for netmask
+                if (LookupHost(strNetmask, vIP, 1, false)) {
+                    ret = CSubNet(network, vIP[0]);
+                    return ret.IsValid();
+                }
+            }
+        }
+        else
+        {
+            ret = CSubNet(network);
+            return ret.IsValid();
+        }
+    }
+    return false;
 }
 
 #ifdef _WIN32

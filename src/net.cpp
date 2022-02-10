@@ -549,7 +549,9 @@ bool CNode::IsBanned(CSubNet subnet)
 }
 
 void CNode::Ban(const CNetAddr& addr, const BanReason &banReason, int64_t bantimeoffset, bool sinceUnixEpoch) {
-    CSubNet subNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"));
+    //CSubNet subNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"));
+    CSubNet subNet;
+    LookupSubNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"), subNet);
     Ban(subNet, banReason, bantimeoffset, sinceUnixEpoch);
 }
 
@@ -580,7 +582,9 @@ void CNode::Ban(const CSubNet& subNet, const BanReason &banReason, int64_t banti
 }
 
 bool CNode::Unban(const CNetAddr &addr) {
-    CSubNet subNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"));
+    //CSubNet subNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"));
+    CSubNet subNet;
+    LookupSubNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"), subNet);
     return Unban(subNet);
 }
 
