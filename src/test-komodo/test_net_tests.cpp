@@ -108,4 +108,198 @@ namespace TestNetTests {
         //EXPECT_TRUE(!addr.IsBindAny());
         EXPECT_EQ(addr.ToString(), link_local);
     }
+
+    TEST(TestNetTests, cnetaddr_serialize_v1) {
+            CNetAddr addr;
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+
+            s << addr;
+            EXPECT_EQ(HexStr(s), "00000000000000000000000000000000");
+            s.clear();
+
+            ASSERT_TRUE(LookupHost("1.2.3.4", addr, false));
+            s << addr;
+            EXPECT_EQ(HexStr(s), "00000000000000000000ffff01020304");
+            s.clear();
+
+            ASSERT_TRUE(LookupHost("1a1b:2a2b:3a3b:4a4b:5a5b:6a6b:7a7b:8a8b", addr, false));
+            s << addr;
+            EXPECT_EQ(HexStr(s), "1a1b2a2b3a3b4a4b5a5b6a6b7a7b8a8b");
+            s.clear();
+
+            ASSERT_TRUE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
+            s << addr;
+            EXPECT_EQ(HexStr(s), "fd87d87eeb43f1f2f3f4f5f6f7f8f9fa");
+            s.clear();
+
+            addr.SetInternal("a");
+            s << addr;
+            EXPECT_EQ(HexStr(s), "fd6b88c08724ca978112ca1bbdcafac2");
+            s.clear();
+    }
+
+    TEST(TestNetTests, cnetaddr_serialize_v2) {
+        CNetAddr addr;
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        // Add ADDRV2_FORMAT to the version so that the CNetAddr
+        // serialize method produces an address in v2 format.
+        s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+
+        s << addr;
+        EXPECT_EQ(HexStr(s), "021000000000000000000000000000000000");
+        s.clear();
+
+        ASSERT_TRUE(LookupHost("1.2.3.4", addr, false));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "010401020304");
+        s.clear();
+
+        ASSERT_TRUE(LookupHost("1a1b:2a2b:3a3b:4a4b:5a5b:6a6b:7a7b:8a8b", addr, false));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "02101a1b2a2b3a3b4a4b5a5b6a6b7a7b8a8b");
+        s.clear();
+
+        ASSERT_TRUE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "030af1f2f3f4f5f6f7f8f9fa");
+        s.clear();
+
+        ASSERT_TRUE(addr.SetInternal("a"));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "0210fd6b88c08724ca978112ca1bbdcafac2");
+        s.clear();
+    }
+
+    TEST(TestNetTests, cnetaddr_unserialize_v2) {
+        CNetAddr addr;
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        // Add ADDRV2_FORMAT to the version so that the CNetAddr
+        // unserialize method expects an address in v2 format.
+        s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+
+        // Valid IPv4.
+        s << MakeSpan(ParseHex("01"          // network type (IPv4)
+                            "04"          // address length
+                            "01020304")); // address
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_TRUE(addr.IsIPv4());
+        EXPECT_EQ(addr.ToString(), "1.2.3.4");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid IPv4, valid length but address itself is shorter.
+        s << MakeSpan(ParseHex("01"      // network type (IPv4)
+                            "04"      // address length
+                            "0102")); // address
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "end of data";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Invalid IPv4, with bogus length.
+        s << MakeSpan(ParseHex("01"          // network type (IPv4)
+                            "05"          // address length
+                            "01020304")); // address
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 IPv4 address with length 5 (should be 4)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Invalid IPv4, with extreme length.
+        s << MakeSpan(ParseHex("01"          // network type (IPv4)
+                            "fd0102"      // address length (513 as CompactSize)
+                            "01020304")); // address
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "Address too long: 513 > 512";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Valid IPv6.
+        s << MakeSpan(ParseHex("02"                                  // network type (IPv6)
+                            "10"                                  // address length
+                            "0102030405060708090a0b0c0d0e0f10")); // address
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_TRUE(addr.IsIPv6());
+        EXPECT_EQ(addr.ToString(), "102:304:506:708:90a:b0c:d0e:f10");
+        ASSERT_TRUE(s.empty());
+
+        // Valid IPv6, contains embedded "internal".
+        s << MakeSpan(ParseHex(
+            "02"                                  // network type (IPv6)
+            "10"                                  // address length
+            "fd6b88c08724ca978112ca1bbdcafac2")); // address: 0xfd + sha256("bitcoin")[0:5] +
+                                                // sha256(name)[0:10]
+        s >> addr;
+        EXPECT_TRUE(addr.IsInternal());
+        EXPECT_EQ(addr.ToString(), "zklycewkdo64v6wc.internal");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid IPv6, with bogus length.
+        s << MakeSpan(ParseHex("02"    // network type (IPv6)
+                            "04"    // address length
+                            "00")); // address
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 IPv6 address with length 4 (should be 16)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Invalid IPv6, contains embedded IPv4.
+        s << MakeSpan(ParseHex("02"                                  // network type (IPv6)
+                            "10"                                  // address length
+                            "00000000000000000000ffff01020304")); // address
+        s >> addr;
+        EXPECT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(s.empty());
+
+        // Invalid IPv6, contains embedded TORv2.
+        s << MakeSpan(ParseHex("02"                                  // network type (IPv6)
+                            "10"                                  // address length
+                            "fd87d87eeb430102030405060708090a")); // address
+        s >> addr;
+        EXPECT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(s.empty());
+
+        // Valid TORv2.
+        s << MakeSpan(ParseHex("03"                      // network type (TORv2)
+                            "0a"                      // address length
+                            "f1f2f3f4f5f6f7f8f9fa")); // address
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_TRUE(addr.IsTor());
+        EXPECT_EQ(addr.ToString(), "6hzph5hv6337r6p2.onion");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid TORv2, with bogus length.
+        s << MakeSpan(ParseHex("03"    // network type (TORv2)
+                            "07"    // address length
+                            "00")); // address
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 TORv2 address with length 7 (should be 10)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Unknown, with extreme length.
+        s << MakeSpan(ParseHex("aa"             // network type (unknown)
+                            "fe00000002"     // address length (CompactSize's MAX_SIZE)
+                            "01020304050607" // address
+                            ));
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "Address too long: 33554432 > 512";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Unknown, with reasonable length.
+        s << MakeSpan(ParseHex("aa"       // network type (unknown)
+                            "04"       // address length
+                            "01020304" // address
+                            ));
+        s >> addr;
+        EXPECT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(s.empty());
+
+        // Unknown, with zero length.
+        s << MakeSpan(ParseHex("aa" // network type (unknown)
+                            "00" // address length
+                            ""   // address
+                            ));
+        s >> addr;
+        EXPECT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(s.empty());
+
+    }
 }

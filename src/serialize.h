@@ -1154,4 +1154,12 @@ size_t GetSerializeSize(const S& s, const T& t)
     return (CSizeComputer(s.GetType(), s.GetVersion()) << t).size();
 }
 
+// https://github.com/bitcoin/bitcoin/pull/19628/files#r476120289
+template <typename T1, size_t PREFIX_LEN>
+inline bool HasPrefix(const T1& obj, const std::array<uint8_t, PREFIX_LEN>& prefix)
+{
+    return obj.size() >= PREFIX_LEN &&
+           std::equal(std::begin(prefix), std::end(prefix), std::begin(obj));
+}
+
 #endif // BITCOIN_SERIALIZE_H

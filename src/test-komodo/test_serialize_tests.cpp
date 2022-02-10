@@ -460,13 +460,15 @@ namespace TestSerializeTests {
         d_address.nTime = 1644510147; // 0x62053BC3
         d_address.nServices = NODE_NETWORK;
 
-        // old (de)serialization of CAddress
+        // *** old (de)serialization of CAddress
 
         // CDataStream ss_disk(SER_DISK, 0xDEAD, d_address);        // adde0000c33b0562010000000000000000000000000000000000ffff010203040605
         // CDataStream ss_network(SER_NETWORK, 0xCAFE, d_address);          // c33b0562010000000000000000000000000000000000ffff010203040605
+        //                                                                     ttttttttssssssssssssssssaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaapppp
 
         CDataStream ss_disk(SER_DISK, 0xDEAD);
-        CDataStream ss_network(SER_NETWORK, 0xCAFE);
+        CDataStream ss_network(SER_NETWORK, /* PROTOCOL_VERSION */ 0xCAFE);
+
         // direct write serialized data
         ss_disk.write("\xad\xde\x00\x00\xc3\x3b\x05\x62\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x01\x02\x03\x04\x06\x05", 34);
         ss_network.write("\xc3\x3b\x05\x62\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x01\x02\x03\x04\x06\x05", 30);
@@ -481,7 +483,7 @@ namespace TestSerializeTests {
         EXPECT_EQ(a1, d_address);
         EXPECT_EQ(a2, d_address);
 
-        // old (de)serialization of CAddrMan
+        // *** old (de)serialization of CAddrMan
 
         /*
             CAddrManTest addrman_noasmap;
@@ -862,6 +864,27 @@ namespace TestSerializeTests {
             EXPECT_TRUE(pinfo->nTime == 1644510147);
             // EXPECT_TRUE(d_address == *pinfo);
         }
+
+        // *** new address (de)serialization
+        ss_network.clear();
+        ss_network.SetType(SER_NETWORK);
+        ss_network.SetVersion(ss_network.GetVersion() | ADDRV2_FORMAT);
+
+        ss_network << d_netaddr;
+        EXPECT_EQ(HexStr(ss_network.begin(), ss_network.end()), std::string("010401020304"));
+
+        CNetAddr na3;
+        ss_network >> na3;
+        EXPECT_EQ(d_netaddr, na3);
+
+        // v1 (old) - 00000000000000000000ffff01020304
+        // v2 (new) - 010401020304
+
+        // Here values calced as following:
+        // 01 - static_cast<uint8_t>(GetBIP155Network()) <- ser_writedata8 (!)
+        // 04 - prevector serialization -> WriteCompactSize
+        // 01020304 - prevector data
+
     }
 
 }
