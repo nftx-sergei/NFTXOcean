@@ -422,5 +422,20 @@ namespace TestSerializeTests {
         EXPECT_TRUE(methodtest3 == methodtest4);
     }
 
+    TEST(TestSerializeTests, compact_size_range_check) {
+
+        uint64_t nServices = 0x080706050403020100;
+        CDataStream ss(SER_DISK, 0);
+        ss << nServices;
+        check_ser_rep<uint64_t>(nServices, {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07});
+        ss.clear();
+        ::WriteCompactSize(ss, nServices); // ff0001020304050607
+        uint64_t tmp_nServices;
+        EXPECT_THROW(tmp_nServices = ::ReadCompactSize(ss), std::ios_base::failure); // throw as: nSizeRet = 0x0706050403020100 > (uint64_t)MAX_SIZE = 0x02000000
+        ::WriteCompactSize(ss, nServices);
+        tmp_nServices = ::ReadCompactSize(ss, false);
+        EXPECT_EQ(tmp_nServices, nServices);
+
+    }
 
 }
