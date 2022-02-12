@@ -110,6 +110,7 @@ class CAddress : public CService
 public:
     CAddress();
     explicit CAddress(CService ipIn, uint64_t nServicesIn = NODE_NETWORK);
+    CAddress(CService ipIn, uint64_t nServicesIn, uint32_t nTimeIn) : CService{ipIn}, nTime{nTimeIn}, nServices{nServicesIn} {};
 
     void Init();
 
@@ -126,7 +127,20 @@ public:
         if ((s.GetType() & SER_DISK) ||
             (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH)))
             READWRITE(nTime);
-        READWRITE(nServices);
+
+        if (nVersion & ADDRV2_FORMAT) {
+            // @71534ef69cfff4e3037eac961cf08c75afe4891b (KomodoOcean), @1d3ec2a1fda7446323786a52da1fd109c01aa6fb (Bitcoin)
+            // ADDRV1 - encode/decode nServices as uint64_t, ADDRV2 - as compact size
+            if (ser_action.ForRead()) {
+                /* CSerActionUnserialize */
+                ::Unserialize(s, REF(CCompactSize<false>(REF(nServices)))); // -> ::ReadCompactSize(s, nServices, false);
+            } else {
+                /* CSerActionSerialize */
+                ::Serialize(s, COMPACTSIZE(nServices)); // -> ::WriteCompactSize(s, nServices);
+            }
+        } else {
+            READWRITE(nServices);
+        }
         READWRITE(*(CService*)this);
     }
 
