@@ -82,6 +82,96 @@ namespace TestNetTests {
 
     }
 
+    TEST(TestNetTests, cnetaddr_basic) {
+
+        CNetAddr addr;
+
+        // IPv4, INADDR_ANY
+        ASSERT_TRUE(LookupHost("0.0.0.0", addr, false));
+        ASSERT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv4());
+
+        EXPECT_TRUE(addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "0.0.0.0");
+
+        // IPv4, INADDR_NONE
+        ASSERT_TRUE(LookupHost("255.255.255.255", addr, false));
+        ASSERT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv4());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "255.255.255.255");
+
+        // IPv4, casual
+        ASSERT_TRUE(LookupHost("12.34.56.78", addr, false));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv4());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "12.34.56.78");
+
+        // IPv6, in6addr_any
+        ASSERT_TRUE(LookupHost("::", addr, false));
+        ASSERT_TRUE(!addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+
+        EXPECT_TRUE(addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "::");
+
+        // IPv6, casual
+        ASSERT_TRUE(LookupHost("1122:3344:5566:7788:9900:aabb:ccdd:eeff", addr, false));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "1122:3344:5566:7788:9900:aabb:ccdd:eeff");
+
+        // TORv2
+        ASSERT_TRUE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsTor());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "6hzph5hv6337r6p2.onion");
+
+        // TORv3
+        const char* torv3_addr = "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion";
+        ASSERT_TRUE(addr.SetSpecial(torv3_addr));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsTor());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), torv3_addr);
+
+        // TORv3, broken, with wrong checksum
+        EXPECT_TRUE(!addr.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscsad.onion"));
+
+        // TORv3, broken, with wrong version
+        EXPECT_TRUE(!addr.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscrye.onion"));
+
+        // TORv3, malicious (disabled, as we haven't ValidAsCString function and checks yet)
+
+        // EXPECT_TRUE(!addr.SetSpecial(std::string{
+        //     "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd\0wtf.onion", 66}));
+
+        // TOR, bogus length
+        EXPECT_TRUE(!addr.SetSpecial(std::string{"mfrggzak.onion"}));
+
+        // TOR, invalid base32
+        EXPECT_TRUE(!addr.SetSpecial(std::string{"mf*g zak.onion"}));
+
+        // Internal
+        addr.SetInternal("esffpp");
+        ASSERT_TRUE(!addr.IsValid()); // "internal" is considered invalid
+        ASSERT_TRUE(addr.IsInternal());
+
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), "esffpvrt3wpeaygy.internal");
+
+        // Totally bogus
+        EXPECT_TRUE(!addr.SetSpecial("totally bogus"));
+    }
+
     TEST(TestNetTests, cnetaddr_basic_scoped_link_local) {
 
         CNetAddr addr;
@@ -132,6 +222,11 @@ namespace TestNetTests {
             EXPECT_EQ(HexStr(s), "fd87d87eeb43f1f2f3f4f5f6f7f8f9fa");
             s.clear();
 
+            ASSERT_TRUE(addr.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+            s << addr;
+            EXPECT_EQ(HexStr(s), "00000000000000000000000000000000");
+            s.clear();
+
             addr.SetInternal("a");
             s << addr;
             EXPECT_EQ(HexStr(s), "fd6b88c08724ca978112ca1bbdcafac2");
@@ -162,6 +257,16 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
         s << addr;
         EXPECT_EQ(HexStr(s), "030af1f2f3f4f5f6f7f8f9fa");
+        s.clear();
+
+        ASSERT_TRUE(addr.SetSpecial("kpgvmscirrdqpekbqjsvw5teanhatztpp2gl6eee4zkowvwfxwenqaid.onion"));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "042053cd5648488c4707914182655b7664034e09e66f7e8cbf1084e654eb56c5bd88");
+        s.clear();
+
+        ASSERT_TRUE(addr.SetSpecial("deckercu42viy5xss2oxy5rgwong4hxl5rgjethq6xv4y7ko6nc3sdqd.onion"));
+        s << addr;
+        EXPECT_EQ(HexStr(s), "04201904a24454e6aa8c76f2969d7c7626b39a6e1eebec4c924cf0f5ebcc7d4ef345");
         s.clear();
 
         ASSERT_TRUE(addr.SetInternal("a"));
@@ -271,6 +376,67 @@ namespace TestNetTests {
                             "07"    // address length
                             "00")); // address
         EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 TORv2 address with length 7 (should be 10)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Valid TORv3.
+        s << MakeSpan(ParseHex("04"                               // network type (TORv3)
+                            "20"                               // address length
+                            "79bcc625184b05194975c28b66b66b04" // address
+                            "69f7f6556fb1ac3189a79b40dda32f1f"
+                            ));
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_TRUE(addr.IsTor());
+        EXPECT_EQ(addr.ToString(),
+                        "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid TORv3, with bogus length.
+        s << MakeSpan(ParseHex("04" // network type (TORv3)
+                            "00" // address length
+                            "00" // address
+                            ));
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 TORv3 address with length 0 (should be 32)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Valid I2P.
+        s << MakeSpan(ParseHex("05"                               // network type (I2P)
+                            "20"                               // address length
+                            "a2894dabaec08c0051a481a6dac88b64" // address
+                            "f98232ae42d4b6fd2fa81952dfe36a87"));
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_EQ(addr.ToString(),
+                        "ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid I2P, with bogus length.
+        s << MakeSpan(ParseHex("05" // network type (I2P)
+                            "03" // address length
+                            "00" // address
+                            ));
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 I2P address with length 3 (should be 32)";
+        ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
+        s.clear();
+
+        // Valid CJDNS.
+        s << MakeSpan(ParseHex("06"                               // network type (CJDNS)
+                            "10"                               // address length
+                            "fc000001000200030004000500060007" // address
+                            ));
+        s >> addr;
+        EXPECT_TRUE(addr.IsValid());
+        EXPECT_EQ(addr.ToString(), "fc00:1:2:3:4:5:6:7");
+        ASSERT_TRUE(s.empty());
+
+        // Invalid CJDNS, with bogus length.
+        s << MakeSpan(ParseHex("06" // network type (CJDNS)
+                            "01" // address length
+                            "00" // address
+                            ));
+        EXPECT_THROW(s >> addr, std::ios_base::failure) << "BIP155 CJDNS address with length 1 (should be 16)";
         ASSERT_TRUE(!s.empty()); // The stream is not consumed on invalid input.
         s.clear();
 
