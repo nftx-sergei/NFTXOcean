@@ -92,6 +92,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsIPv4());
 
         EXPECT_TRUE(addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "0.0.0.0");
 
         // IPv4, INADDR_NONE
@@ -100,6 +101,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsIPv4());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "255.255.255.255");
 
         // IPv4, casual
@@ -108,6 +110,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsIPv4());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "12.34.56.78");
 
         // IPv6, in6addr_any
@@ -116,6 +119,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsIPv6());
 
         EXPECT_TRUE(addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "::");
 
         // IPv6, casual
@@ -124,7 +128,27 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsIPv6());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "1122:3344:5566:7788:9900:aabb:ccdd:eeff");
+
+        // IPv6, scoped/link-local. See https://tools.ietf.org/html/rfc4007
+        // We support non-negative decimal integers (uint32_t) as zone id indices.
+        // Test with a fairly-high value, e.g. 32, to avoid locally reserved ids.
+        const std::string link_local{"fe80::1"};
+        const std::string scoped_addr{link_local + "%32"};
+        ASSERT_TRUE(LookupHost(scoped_addr, addr, false));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+        EXPECT_TRUE(!addr.IsBindAny());
+        const std::string addr_str{addr.ToString()};
+        EXPECT_TRUE(addr_str == scoped_addr || addr_str == "fe80:0:0:0:0:0:0:1");
+        // The fallback case "fe80:0:0:0:0:0:0:1" is needed for macOS 10.14/10.15 and (probably) later.
+        // Test that the delimiter "%" and default zone id of 0 can be omitted for the default scope.
+        ASSERT_TRUE(LookupHost(link_local + "%0", addr, false));
+        ASSERT_TRUE(addr.IsValid());
+        ASSERT_TRUE(addr.IsIPv6());
+        EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_EQ(addr.ToString(), link_local);
 
         // TORv2
         ASSERT_TRUE(addr.SetSpecial("6hzph5hv6337r6p2.onion"));
@@ -132,6 +156,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsTor());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "6hzph5hv6337r6p2.onion");
 
         // TORv3
@@ -141,6 +166,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsTor());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(!addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), torv3_addr);
 
         // TORv3, broken, with wrong checksum
@@ -166,6 +192,7 @@ namespace TestNetTests {
         ASSERT_TRUE(addr.IsInternal());
 
         EXPECT_TRUE(!addr.IsBindAny());
+        EXPECT_TRUE(addr.IsAddrV1Compatible());
         EXPECT_EQ(addr.ToString(), "esffpvrt3wpeaygy.internal");
 
         // Totally bogus

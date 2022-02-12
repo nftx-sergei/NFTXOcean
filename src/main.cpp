@@ -7391,6 +7391,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->PushMessage("verack");
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
 
+        // Signal ADDRv2 support (BIP155).
+        pfrom->PushMessage("sendaddrv2");
+
         if (!pfrom->fInbound)
         {
             // Advertise our address
@@ -7501,18 +7504,27 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "addr")
+    else if (strCommand == "addr" || strCommand == "addrv2")
     {
+        int stream_version = vRecv.GetVersion();
+        if (strCommand == "addrv2") {
+            // Add ADDRV2_FORMAT to the version so that the CNetAddr and CAddress
+            // unserialize methods know that an address in v2 format is coming.
+            stream_version |= ADDRV2_FORMAT;
+        }
+
+        OverrideStream<CDataStream> s(&vRecv, vRecv.GetType(), stream_version);
         vector<CAddress> vAddr;
-        vRecv >> vAddr;
+        s >> vAddr;
 
         // Don't want addr from older versions unless seeding
         if (pfrom->nVersion < CADDR_TIME_VERSION && addrman.size() > 1000)
             return true;
-        if (vAddr.size() > 1000)
+
+        if (vAddr.size() > MAX_ADDR_TO_SEND)
         {
             Misbehaving(pfrom->GetId(), 20);
-            return error("message addr size() = %u", vAddr.size());
+            return error("message addr%s size() = %u", ((stream_version & ADDRV2_FORMAT) ? "v2" : ""), vAddr.size());
         }
 
         // Store the new addresses
@@ -7565,6 +7577,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->fGetAddr = false;
         if (pfrom->fOneShot)
             pfrom->fDisconnect = true;
+    }
+    else if (strCommand == "sendaddrv2")
+    {
+        pfrom->m_wants_addrv2 = true;
     }
     else if (strCommand == "ping")
     {
@@ -8476,23 +8492,37 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         {
             vector<CAddress> vAddr;
             vAddr.reserve(pto->vAddrToSend.size());
+
+            const char* msg_type;
+            int make_flags;
+            if (pto->m_wants_addrv2) {
+                msg_type = "addrv2";
+                make_flags = ADDRV2_FORMAT;
+            } else {
+                msg_type = "addr";
+                make_flags = 0;
+            }
+
             BOOST_FOREACH(const CAddress& addr, pto->vAddrToSend)
             {
                 if (!pto->addrKnown.contains(addr.GetKey()))
                 {
                     pto->addrKnown.insert(addr.GetKey());
                     vAddr.push_back(addr);
-                    // receiver rejects addr messages larger than 1000
-                    if (vAddr.size() >= 1000)
+                    // receiver rejects addr messages larger than MAX_ADDR_TO_SEND
+                    if (vAddr.size() >= MAX_ADDR_TO_SEND)
                     {
-                        pto->PushMessage("addr", vAddr);
+                        pto->PushMessage(msg_type, vAddr);
+                        pto->ssSend.SetVersion(pto->ssSend.GetVersion() | make_flags); // TODO: or set version before PushMessage?
                         vAddr.clear();
                     }
                 }
             }
             pto->vAddrToSend.clear();
-            if (!vAddr.empty())
-                pto->PushMessage("addr", vAddr);
+            if (!vAddr.empty()) {
+                pto->PushMessage(msg_type, vAddr);
+                pto->ssSend.SetVersion(pto->ssSend.GetVersion() | make_flags); // TODO: or set version before PushMessage?
+            }
         }
 
         CNodeState &state = *State(pto->GetId());
