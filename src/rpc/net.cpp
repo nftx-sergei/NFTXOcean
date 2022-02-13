@@ -33,6 +33,8 @@
 
 #include <univalue.h>
 
+#include "addrman.h"
+
 using namespace std;
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -679,6 +681,54 @@ UniValue clearbanned(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return NullUniValue;
 }
 
+static UniValue getnodeaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() > 1) {
+        throw std::runtime_error(
+            "getnodeaddresses ( count )\n"
+            "\nReturn known addresses which can potentially be used to find new nodes in the network\n"
+            "\nArguments:\n"
+            "1. \"count\"    (numeric, optional) How many addresses to return. (default = 1)\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"time\": ttt,                (numeric) Timestamp in seconds since epoch (Jan 1 1970 GMT) keeping track of when the node was last seen\n"
+            "    \"services\": n,              (numeric) The services offered\n"
+            "    \"address\": \"host\",          (string) The address of the node\n"
+            "    \"port\": n                   (numeric) The port of the node\n"
+            "  }\n"
+            "  ,....\n"
+            "]\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getnodeaddresses", "8")
+            + HelpExampleRpc("getnodeaddresses", "8")
+        );
+    }
+
+    int count = 1;
+    if (!params[0].isNull()) {
+        count = params[0].get_int();
+        if (count <= 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Address count out of range");
+        }
+    }
+    // returns a shuffled list of CAddress
+    std::vector<CAddress> vAddr = addrman.GetAddr();
+    UniValue ret(UniValue::VARR);
+
+    int address_return_count = std::min<int>(count, vAddr.size());
+    for (int i = 0; i < address_return_count; ++i) {
+        UniValue obj(UniValue::VOBJ);
+        const CAddress& addr = vAddr[i];
+        obj.pushKV("time", (int)addr.nTime);
+        obj.pushKV("services", (uint64_t)addr.nServices);
+        obj.pushKV("address", addr.ToStringIP());
+        obj.pushKV("port", addr.GetPort());
+        ret.push_back(obj);
+    }
+    return ret;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -694,6 +744,7 @@ static const CRPCCommand commands[] =
     { "network",            "setban",                 &setban,                 true  },
     { "network",            "listbanned",             &listbanned,             true  },
     { "network",            "clearbanned",            &clearbanned,            true  },
+    { "network",            "getnodeaddresses",       &getnodeaddresses,       true  },
 };
 
 void RegisterNetRPCCommands(CRPCTable &tableRPC)
