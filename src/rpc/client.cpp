@@ -180,6 +180,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "calc_MoM", 2},
     { "migrate_completeimporttransaction", 1},
     { "getnodeaddresses", 0 },
+    { "addpeeraddress", 1},
     { "letsdebug", 1 }
 };
 

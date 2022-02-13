@@ -688,7 +688,8 @@ static UniValue getnodeaddresses(const UniValue& params, bool fHelp, const CPubK
             "getnodeaddresses ( count )\n"
             "\nReturn known addresses which can potentially be used to find new nodes in the network\n"
             "\nArguments:\n"
-            "1. \"count\"    (numeric, optional) How many addresses to return. (default = 1)\n"
+            "1. \"count\"    (numeric, optional) How many addresses to return. Limited to the smaller of " + std::to_string(ADDRMAN_GETADDR_MAX) +
++                " or " + std::to_string(ADDRMAN_GETADDR_MAX_PCT) + "% of all known addresses. (default = 1)\n"
             "\nResult:\n"
             "[\n"
             "  {\n"
@@ -729,6 +730,48 @@ static UniValue getnodeaddresses(const UniValue& params, bool fHelp, const CPubK
     return ret;
 }
 
+static UniValue addpeeraddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() > 2) {
+        throw std::runtime_error(
+            "addpeeraddress \"address\" port\n"
+            "\nAdd the address of a potential peer to the address manager. This RPC is for testing only.\n"
+            "\nArguments:\n"
+            "1. address    (string, required) The IP address of the peer\n"
+            "2. port       (numeric, required) The port of the peer\n"
+            "\nResult:\n"
+            "{                            (json object)\n"
+            "  \"success\" : true|false     (boolean) whether the peer address was successfully added to the address manager\n"
+            "}"
+            "\nExamples:\n"
+            + HelpExampleCli("addpeeraddress", "\"1.2.3.4\" 7770")
+            + HelpExampleCli("addpeeraddress", "\"deckercu42viy5xss2oxy5rgwong4hxl5rgjethq6xv4y7ko6nc3sdqd.onion\" 7770")
+            + HelpExampleRpc("addpeeraddress", "\"1.2.3.4\", 7770")
+        );
+    }
+
+    UniValue obj(UniValue::VOBJ);
+
+    std::string addr_string = params[0].get_str();
+    uint16_t port = params[1].get_int();
+
+    CNetAddr net_addr;
+    if (!LookupHost(addr_string, net_addr, false)) {
+        obj.pushKV("success", false);
+        return obj;
+    }
+    CAddress address = CAddress({net_addr, port}, NODE_NETWORK);
+    address.nTime = GetTime();
+    // The source address is set equal to the address. This is equivalent to the peer
+    // announcing itself.
+    if (!addrman.Add(address, address)) {
+        obj.pushKV("success", false);
+        return obj;
+    }
+    obj.pushKV("success", true);
+    return obj;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -745,6 +788,7 @@ static const CRPCCommand commands[] =
     { "network",            "listbanned",             &listbanned,             true  },
     { "network",            "clearbanned",            &clearbanned,            true  },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       true  },
+    { "hidden",             "addpeeraddress",         &addpeeraddress,         true  },
 };
 
 void RegisterNetRPCCommands(CRPCTable &tableRPC)
