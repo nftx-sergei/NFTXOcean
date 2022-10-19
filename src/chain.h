@@ -500,7 +500,7 @@ public:
         return nSolution;
     }
 
-        //! This method should not be called on a CDiskBlockIndex.
+    //! This method should not be called on a CDiskBlockIndex.
     virtual void SetSolution(const std::vector<unsigned char>& solution) {
         assert(false);
     }
