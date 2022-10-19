@@ -840,6 +840,7 @@ bool GetAddressUnspent(uint160 addressHash, int type,
 
 /** Functions for disk access for blocks */
 bool WriteBlockToDisk(const CBlock& block, CDiskBlockPos& pos, const CMessageHeader::MessageStartChars& messageStart);
+bool ReadBlockHeaderFromDisk(CBlockHeader& header, const CDiskBlockPos& pos);
 bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos,bool checkPOW);
 bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW);
 bool PruneOneBlockFile(bool tempfile, const int fileNumber);

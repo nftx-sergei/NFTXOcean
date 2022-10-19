@@ -129,7 +129,7 @@ public:
      * @returns true on success
      */
     bool WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, 
-            const std::vector<const CBlockIndex*>& blockinfo);
+            const std::vector<CBlockIndex*>& blockinfo);
     /***
      * Erase a batch of block index records and sync
      * @param blockinfo the records

@@ -2380,6 +2380,26 @@ bool WriteBlockToDisk(const CBlock& block, CDiskBlockPos& pos, const CMessageHea
     return true;
 }
 
+bool ReadBlockHeaderFromDisk(CBlockHeader& header, const CDiskBlockPos& pos)
+{
+    header.SetNull();
+
+    // Open history file to read
+    CAutoFile filein(OpenBlockFile(pos, true), SER_DISK, CLIENT_VERSION);
+    if (filein.IsNull())
+        return error("ReadBlockHeaderFromDisk: OpenBlockFile failed for %s", pos.ToString());
+
+    // Read header
+    try {
+        filein >> header;
+    }
+    catch (const std::exception& e) {
+        return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
+    }
+
+    return true;
+}
+
 bool ReadBlockFromDisk(int32_t height,CBlock& block, const CDiskBlockPos& pos,bool checkPOW)
 {
     uint8_t pubkey33[33];
@@ -3900,7 +3920,7 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                         vFiles.push_back(make_pair(*it, &vinfoBlockFile[*it]));
                     setDirtyFileInfo.erase(it++);
                 }
-                std::vector<const CBlockIndex*> vBlocks;
+                std::vector<CBlockIndex*> vBlocks;
                 vBlocks.reserve(setDirtyBlockIndex.size());
                 for (set<CBlockIndex*>::iterator it = setDirtyBlockIndex.begin(); it != setDirtyBlockIndex.end(); ) {
                     vBlocks.push_back(*it);
@@ -3908,6 +3928,11 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                 }
                 if (!pblocktree->WriteBatchSync(vFiles, nLastBlockFile, vBlocks)) {
                     return AbortNode(state, "Files to write to block index database");
+                }
+                // Now that we have written the blocks to disk, we do not need to store the solutions in the CBlockIndex objects.
+                // cs_main must be held here.
+                for (CBlockIndex *pblockindex : vBlocks) {
+                    pblockindex->ClearSolution();
                 }
             }
             // Finally remove any pruned files
