@@ -21,6 +21,8 @@
 
 #include <boost/assign/list_of.hpp>
 
+#include "komodo.h" // komodo_voutupdate
+
 using namespace std;
 
 static const bool fUseOnlyConfirmed = true;
@@ -526,12 +528,255 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     return result;
 }
 
+UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+    /* this RPC should create "fake" (test) notarization transaction using 11 or 13 signers,
+    from current network (testnet or mainnet), using current season setting with notaries
+    keys from the given array. as it test RPC, keys are hardcoded, so, make sure that keys
+    here corresponds other consensus rules.
+    */
+
+    // best way to create such array - use https://deckersu.github.io/coinbin/#newAddress
+    const char *pNotariesKeys[13] = {
+        "UuvvCE2Kay7LnDtStEYyuACfLyaf96yEY7fWzhZaiLZKengQnKjE", // 0300483d40eebc26151a79927a5dcf2db33d922f2c609e14389a307e37e1dbdaff - RAbk5Bsq87os6eGZG9CkBQWmbBsEYrP45D
+        "Up8Zvn1k81XC58dpiF6ntYqqw6fHRUTLGAgWbWjtgD7H83nksSKR", // 030cb14d10818be206c119ebe8cd0474258f7b1e021c663a3ef46085e7f0a5b51f - RCgkyVdpF6HaYDajcnmmUsu2VHSqQ9cTqi
+        "UwznhYGJQ9Y4WesXogpFVadE3oStshV9fE3ZsmejvSHyxieqisUx", // 027a5418c54ea72802a6c66af28e2cf04be607dc1f89b2e23b17a1fe6cfa3290b2 - RPsDhgytKwLCcoNfesQP2aG6dPFnbJLNT6
+        "UpZpkJk1xYN4azKXUBjVbKjN9gBkNnm4AK1tf1UFRuyQsVdSyYnD", // 02ec7d5c60150a0ea033aa1609fbb12834492815c00d01079cdaa7e27394f988cc - RULUBnhs8bBajVEiMW11PLXC3Wx3fcV52J
+        "UtbQqmmd71R6DoivpfvHLBpoXgskEfx9sbqjDhp3nR5hWE6E5Xi7", // 02ec116f12fbb1cde0979ae2d28d50cc106c2099361608e040db46ce92de254c65 - RMbEh334jsJKCMV2XsHJG4dLuqr5exjvBd
+        "UvGEKh836uTW8Y23CEpWwzPsF4Qv4xh7E3NFa2K1Eq6Wvz1YgVVa", // 02bda26d85f0c71e9466fac8ba67485a4c3adcc41956260f6678577cabc14aa995 - RQSsu5TgCKFfxoDLazKqoSyTKMtmfSyVhs
+        "UvXrkrgrbSHEWXhN1vG4eE9zw77LRa1xtjkoECJ1nTCkouJb3Lxv", // 02288b84cebe8d7766ba251405b314a07f692c9c680c9bbf37feb28c4a1f0bf369 - RXtJ9rgpX5XdRwxsqv2EnHY3TtQLKySQ5k
+        "Uvm1tRHk3211VmDCDSseuEQoUQxNpLFJWZ6Gq1WdnVuf5pfkafDf", // 028b79e28dc94fb3b83c3390df6432ed78610290afca08a917d5544e9ac2f928db - REmNwMZ7TTock23z6nPU89DRi9RpRT1s6o
+        "UtLehtgjvXnxurs6VQofjDaWUb611nx4LzWPbW1itzctYQX8tr2X", // 03d3e79a94cbcf9f759df86c4147c46357080e88087e2427f9a8dda179c3b32eb1 - RKoDRvZ5P3k7i1M1dQBnJoUB2Hm5ih71dz
+        "UrTLTDiheAzk3tocN3Z5FZN4LJdZcnMst5zyFxhkD71jZoTmyQCr", // 0394215dc26aa65bc7dd97c839a2f48b94384016df98f7435870673d0118c6df2b - RMhNV4aMUPpEGiAFA7f1To3oZneCfKm4SJ
+        "Upu5GSnopL1U8uE64RUTSgLvmewaTZPKdqt1z52V2duhUoXgd6wH", // 0211156d6fb6d40cd7a46e1eaf08cbc9fd1f1dfd95a55618af6200401f37e5af59 - RNmKNxYjz1BA8BJC1yGca9nySzNXWpm2qt
+        "UwCnoBfVxiwy1z426BuLotMzHx6KtioMBz5nEUzY8Ni6GaRhq6ei", // 034729e9448b8480be2e09d414d39eecd7fa242aca930d272ba3ddfd8f533e82f5 - RQDzUmN5Cw2PNKZfLXghZdd2DJMqFAUCNR
+        "UuMgdqQsPsGVZqKL3r8CY7CzvyUQW5K8DrpMYz9ZGtufmsuUv8ni", // 03dfe75d9ab5e365dada19db384bb4822076526ba938a828a87452d957c7fb332b - RLCBw7FBsL4JDDnummEeEKxffuRA5Q9R6F
+    };
+
+    /*
+        Now we need make notaryvins for all of these 13 addresses above, i.e. make 0.00010000 TKMD p2pk utxo for each of notaries,
+        and after make a notarization tx with needed parameters.
+
+        Useful links and explanations:
+
+        - https://satindergrewal.medium.com/delayed-proof-of-work-explained-9a74250dbb86
+        - https://bitcointalk.org/index.php?topic=1605144.msg32538076#msg32538076 - KMD notarization TX explanation
+
+        "notarized": 3166450,
+        "prevMoMheight": 0,
+        "notarizedhash": "04daa4336b1717d9835dc1dea85e74f565834bffd85ccc9ab32696d0094adc83",
+        "notarizedtxid": "2bf7ebb3e70a9e20dbade6ec05bf5a069093ab7b11087c7ddfcd7c20563502e6",
+
+        litecoin/src/litecoin-cli getrawtransaction 2bf7ebb3e70a9e20dbade6ec05bf5a069093ab7b11087c7ddfcd7c20563502e6
+        010000000d5aa917ac936dc976d822e5d45c7a81396e4b9228e52cbcc20ca583a085461b6e03000000494830450221008ae415bc4400fe5ad5269fe0c57fe1347c6bee96a9726276ddbddafe19fbc15002204006ce2fc03c61efeb989b625dad0f1ed0c4b8087bb9a245737bed48b957d0a701ffffffff7a01db0742a6d17974ea915631771b7ae002419f3822595ccb8d23a6aa2c9cf70000000049483045022100abf7d3c250d823d6d4c9cd77eeee88c82210e6c2504529ab8f0ccfdd14ebb8980220609e90adce0c432a8900fec38807b6e08dea6d8139b4b16f40a2a8c28a2ca20e01ffffffffefb927ed583f2122e1499d0bb745d5d96be995156f5084d6a793b401664b314f0000000049483045022100ba1716dd2f1df85e78cff143f22a7b4589cfad4dcf0a87d227af3618c650297602207cb126d056dae5800a6bde5dd7f67f6d1b221058850c0e3a8cad28e8048e837701ffffffff1e15595aeb2c207dc1d33ce276d345745db88b5ff5bec7ded4d5a68d99a238500300000049483045022100beceec7310cd2e55129b64afb5abb0740d2d853d9472af980a9169873f7ae0d902205553804eba860f6d7ad07472d4b52090bae9a5c1cd14a918302090d18a2686d601fffffffffb492298209630defa8e9f3d991d624dd83ad865e6075e7c17a725ed947ccc790a00000048473044022100cfe12f5c59188d5e23f960645c3a882a89398a9a6473b6840f49c4d7d3166ed9021f6c255dc882ffaab7a344494e6b43574c3d0896c8ede0e994a98277dbc07aa401ffffffffa7dbbce1cd2ed9d408216777a65d8399a4a7573f4aafbb9bae9152a72d8917eb0600000049483045022100bae73711a569cc5728f75292f4eab7ed415cde1288512372e45947a6ff78af7d02204a0f2610d6c35f5e477cbe9195e7108e0d1f3fe895db45bb2ac571fb774636fd01ffffffffc1fff442e49b7c920a34efd238ac9c97d3cba2b325f82ca9bbfbd3e84e1c972a2f000000474630430220404f9d7292a8552c7eb3202e75a0fe7331f26f234f96b034b247da6924c2ba15021f7ebcf340695add934b1664e7b3bf253aad88d603d0dae69c935b445f4c6b0f01ffffffff311add10af113d1038500e78f86bf58abf4745819c2863f0c10a7e422f9a0a253f00000048473044022039b955e71243078d1fcb1e17314f245b998a5f63aa0a92b6034fa0748e41ad21022048684a21a1bf0780be0ce699972d4f42e30be014ffe9aeb3ca38635b845f5e0101fffffffff686053c93f499b7562859c8ce4f9a0dba7d7209574dcfa74dc268ce0b5ccbb60300000048473044022047e874c7c605bf99cdbf32fd53f2a757e6cbddb34a89bd944c82a782c89a356702202f0126942212898259a12e1f15f39283657393eb13f0593f908509a5f1c8fbdf01ffffffff8b3c93c59063ba5846b190ac143df066c859f617a842ac57d39866f43e21f4da0300000049483045022100970aa36977047399c5cc92812972c80e7c7bf819e100a7636273660d1bad94d1022047f6cf0f4a5ebad219a950e70591df182d2de42ff746dca1e657ca9588f2d07901ffffffffb6e84123ec6de6389728b03047d0e19d458523e131d62f0db2903588d487e427020000004847304402207029fa5e11d2e6371c88a05b44e2900ebc5663f5e1fea197e3b3fd76f0576dbc02203cc13c6912189ec02d32624d713d25d69d6a280bbff6e84b373b3fd624e4099401ffffffff012ec97ac5f09781ad0257e682158c36b5935c43d775123d2941a6ea901e10b30400000049483045022100d8655d855a6e7ab9df8e86b54c38815b90120b4daae3fe847fe62868a01984f0022075ab81014d0e18a590d51bee1c1afff517c9278e5c4fc228adb96a96c2c6785301ffffffff60b5ced101879ef834333e3f6ddda65246ba0289e489f0398e2189b1c537f9bc040000004847304402207eebebe82a01d1cb6467f77e8cf8e9e96c4c9f610712d319a8ebba42e621272f022031f6855ad643ea7ae36598d2e04ef7158a4c414584096256493b67d2c698da7f01ffffffff02f0810100000000002321020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac00000000000000002a6a2883dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f25030004b4d440000000000
+
+        "vout": [
+                    {
+                    "value": 0.00098800,
+                    "n": 0,
+                    "scriptPubKey": {
+                        "asm": "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9 OP_CHECKSIG",
+                        "hex": "21020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac",
+                        "reqSigs": 1,
+                        "type": "pubkey",
+                        "addresses": [
+                        "LhGojDga6V1fGzQfNGcYFAfKnDvsWeuAsP"
+                        ]
+                    }
+                    },
+                    {
+                    "value": 0.00000000,
+                    "n": 1,
+                    "scriptPubKey": {
+                        "asm": "OP_RETURN 83dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f25030004b4d4400",
+                        "hex": "6a2883dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f25030004b4d4400",
+                        "type": "nulldata"
+                    }
+                    }
+                ],
+
+        000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f--------========
+        83dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f25030004b4d4400
+
+        block (kmd): 04daa4336b1717d9835dc1dea85e74f565834bffd85ccc9ab32696d0094adc83 (3166450)
+        notarized_desttxid: 2bf7ebb3e70a9e20dbade6ec05bf5a069093ab7b11087c7ddfcd7c20563502e6
+        notarized_srctxid_in_block: 3166463
+
+        How to find notarized_srctxid? (srctxid also often called "backnotarization").
+
+        You can try to find the ht of block in which backnotarization tx is included in LOG:
+
+        debug.log (Komodo)
+        2022-11-16 01:24:54 [] ht.3166463 NOTARIZED.3166450 KMD.04daa4336b1717d9835dc1dea85e74f565834bffd85ccc9ab32696d0094adc83 BTCTXID.2bf7ebb3e70a9e20dbade6ec05bf5a069093ab7b11087c7ddfcd7c20563502e6 lens.(72 74) MoM.0000000000000000000000000000000000000000000000000000000000000000 0
+
+        Here is this height is ht.3166463.
+
+        Now you can call getNotarisationsForBlock 3166463 RPC and get:
+
+        "txid": "8b34aaa8f35424746e0d7f520f6c9fe5eae6a43af7c380de75923728d8a5d5bd",
+        "chain": "KMD",
+        "height": 3166450
+
+        Or you can scan via scanNotarisationsDB  3166463 KMD and get the same:
+
+        "height": 3166463,
+        "hash": "8b34aaa8f35424746e0d7f520f6c9fe5eae6a43af7c380de75923728d8a5d5bd",
+
+        So:
+
+        notarized_srctxid: 8b34aaa8f35424746e0d7f520f6c9fe5eae6a43af7c380de75923728d8a5d5bd
+
+        "vout": [
+                    {
+                    "value": 0.00098800,
+                    "valueSat": 98800,
+                    "n": 0,
+                    "scriptPubKey": {
+                        "asm": "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9 OP_CHECKSIG",
+                        "hex": "21020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac",
+                        "reqSigs": 1,
+                        "type": "pubkey",
+                        "addresses": [
+                        "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+                        ]
+                    }
+                    },
+                    {
+                    "value": 0.00000000,
+                    "valueSat": 0,
+                    "n": 1,
+                    "scriptPubKey": {
+                        "asm": "OP_RETURN 83dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f2503000e6023556207ccddf7d7c08117bab9390065abf05ece6addb209e0ae7b3ebf72b4b4d4400",
+                        "hex": "6a4883dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f2503000e6023556207ccddf7d7c08117bab9390065abf05ece6addb209e0ae7b3ebf72b4b4d4400",
+                        "type": "nulldata"
+                    }
+                    }
+                ],
+
+        000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f--------000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f========
+        83dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f2503000e6023556207ccddf7d7c08117bab9390065abf05ece6addb209e0ae7b3ebf72b4b4d4400
+
+        - https://komodostats.com/opreturn - service for decode opreturns ...
+    */
+
+    /*
+    CTransaction tx_nn_KMD2LTC; // we could use DecodeHexTx from core_read.cpp but will not
+    std::vector<unsigned char> txData(ParseHex("0400008085202f890ded70f709c6c35e3fa3a48c02f6dc16941ef04ba0858a0d79e723ced5c32b1eab200000004847304402200ce931d5a75b232466ec7f5779619e35d619e983119bd7b4ff10d325b4cf46d302203669cd0704fcc59818f2c4ce827976de7db9d66bf83788d9d0b3cfa88c8d0b4f01ffffffff4e466b68767a6810c0b398534933c270a00feeec301a0f9316ddd6c66746000e0a0000004948304502210081afe105f56e1b53e859ef4b7e3cf3f589d1522ec745f6e36b37602d9713ae1902206bb47569911f5445622a65bce329f5a56e71708c85557e437f8caf5be326cdfd01ffffffff197ff1d3f05a9a7e9dfa697c3962f80d760aece156687caf7d3620a98c33d8d31f000000484730440220187f01e07d4e51e907a4a01eba6703a54cc2ca8170a3b2248c1182bb4e95b59d022044f5af8f9638247a8e1285983b6c994ef683930440d11018c2f1f5f97ccc40de01ffffffffc7b13e1b9feac31fe39c82f54655612e6d66b4cc9ea0d2b8143e612db2f486150d00000049483045022100ff1e11ed229d00ef8b25a12ceaa7262d67651c903571a513146d729c5f34816302200d72b98ef53e70877c485d41e6f44acc6f5be739295292809b57adc47b641c8b01ffffffffb261573803f82ce4cb568a8aaaca140f7bf1f1ce0664e45868f45020b756186b060000004847304402206adf5832c9cd782faa799c73c22d9ad0a40a78fbbc0cf96f7d1f251724f915e2022037fcea9308a831998937115bcfe026b85f250bf177c8f04352a4235d3c1bca1a01ffffffff523d547a76154a2436c9cfb6227c22dde47e700e93a2a2b546b69363194bb7ec020000004847304402201d20c5e80bb7fed170c191486b0dee6aa0dd106e12d648a5fe50e1b6df516dfc02201e3a5041a70f3f0a1559b884269f382aad73f6c60e59b9453cf717b76bb05ca001ffffffff7341c6229a6bcc3a6fa8b8a76e978da300e7d4dc767246812b5621cde94e31393f0000004847304402203bb491f17febb4c016fc65936b1324c1b741c5c8d31d752126532eea407627530220252393a1f3394a0f903ccfba3510e5f4cd7ad74436e7cb92573b1c88a47b811501ffffffff29939917acb79942402c0c149cc42a307d858b845ffea06836852b11c3168f682800000049483045022100bea1dacc51ec2f3469cc7a5b0b9661021daaad3d00a114d6a8efb4c52f43d7a702200a96351eaafda5fc23d992644a3f906f28e634ebc53a39ecddd13e543aaac9de01ffffffffdf28795b1642c267db3cde3a2dd2ec60bec3200c46b8bb46777965639782e45300000000494830450221008936a6b7645fcc3e2cac1272e1f1967c392f30df9332f023f622bd9a863f3dba02207f94ad371d55257f61ec8f078873bccaccab2d0883693f49f4035d0717d6eb4401ffffffff134ed22a172f11198cf47fa4c5d28583cea525aab0b6784b35e7322375023f0404000000484730440220200bb72387ecd69b088c967352508ff2e3b36befeb68b74513c20470913385240220361d8665db57bf8e7fd11e2f81516ecaa60a141d8fe201b1b8a10d7e3b6646cd01ffffffffe523b2255e4263905c75a90e99d08ecd3602170a6c6e180469cc9b8be5821eaa100000004847304402204f97576dd1dff83361a7b2ee71fbedd65b986adcefd315e1e7c961cd9c6f411f022020dc7ee0105975a28ffa2535c3ca8cdcdc8bd116b3b241d17da50ae986269c7201ffffffffbed2a9a04e28224a830105f4521978a14846e3154824e716e202a8534d0866ed12000000484730440220448d667c1719015185c91fe828032bce48080ff215a5fba31513760be6a164ad022061a5f985798f2f66979f301c2458b7740a0063256c5185daf8f4e2154b0ff73301ffffffffccc00126b1a0a4624bc70e3a8ac58d70875ad894d18750bd8f9bc6219a3dc2360d000000484730440220410b62930ee9240919e59dedf79b7e443352449209a0fb0a58061c323e9d5834022078c8b73b373db188b761eea9cf52c23f35677b99e6c630cf67ece0f2cd865d8f01ffffffff02f0810100000000002321020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac00000000000000004a6a4883dc4a09d09626b39acc5cd8ff4b8365f5745ea8dec15d83d917176b33a4da04f2503000e6023556207ccddf7d7c08117bab9390065abf05ece6addb209e0ae7b3ebf72b4b4d440000000000000000000000000000000000000000"));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    ssData >> tx_nn_KMD2LTC;
+
+    CBlock block;
+    block.vtx.push_back(tx_nn_KMD2LTC);
+
+    int32_t isratification = 0;
+    int32_t i = 0; int32_t j = 1; // i - tx number in block, j - vout number in tx
+    const CScript& script = block.vtx[i].vout[j].scriptPubKey;
+    uint8_t *scriptbuf = const_cast<uint8_t *>(&script.front());
+    uint64_t voutmask = 0;
+    int32_t specialtx = 0;
+    int32_t notarizedheight = 0;
+    int32_t notaryid = -1;
+
+    notaryid = komodo_voutupdate(
+        false, // fJustCheck
+        &isratification,
+        -1,
+        scriptbuf,
+        script.size(),
+        3166463, // height, should match *notarizedheightp < height, i.e. should be >= notarized height in tx
+        block.vtx[i].GetHash(), // txhash
+        i,
+        j,
+        &voutmask,
+        &specialtx,
+        &notarizedheight,
+        (uint64_t)block.vtx[i].vout[j].nValue, // value
+        1, // notarized
+        0x1FFF, // signedmask
+        1668561782 // blocktime
+    );
+ */
+
+    /* First we should send notaryvins to notaries, so, let's split across notaries addresses */
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Get available utxos
+    std::vector<COutput> vecOutputs;
+    pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
+
+    if (vecOutputs.empty()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Haven't any utxos in the wallet.");
+    }
+
+    uint8_t tmp_pubkeys[64][33];
+    int32_t numnotaries = komodo_notaries(tmp_pubkeys,chainActive.Tip()->nHeight + 1, GetTime());
+
+    CAmount totalSplitTxValue = numnotaries * NOTARY_VIN_AMOUNT + NN_SPLIT_DEFAULT_MINERS_FEE;
+
+    std::vector<COutput>::iterator utxo_to_split_iter = std::find_if(vecOutputs.begin(), vecOutputs.end(), [totalSplitTxValue](const COutput& utxo) { 
+        const CTxOut& txOut = utxo.tx->vout[utxo.i];
+        return utxo.fSpendable &&
+               utxo.nDepth > 0 &&
+               txOut.nValue >= totalSplitTxValue;
+    });
+
+    if (utxo_to_split_iter == vecOutputs.end())
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Insufficient balance. Can't split.");
+
+    const int nextBlockHeight = chainActive.Height() + 1;
+    CMutableTransaction rawTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
+    rawTx.vin.push_back(CTxIn(utxo_to_split_iter->tx->GetHash(), utxo_to_split_iter->i));
+
+    rawTx.vout.reserve(1 + numnotaries);
+
+    // vout: add change as first vout
+    const CTxOut& prevOut = utxo_to_split_iter->tx->vout[utxo_to_split_iter->i]; 
+    CAmount sendAmount = prevOut.nValue - totalSplitTxValue;
+    rawTx.vout.push_back(CTxOut(sendAmount, prevOut.scriptPubKey));
+
+    // vout: add notary vins for all notaries
+    for (size_t i = 0; i < numnotaries; i++) {
+       CKey nnkey = DecodeCustomSecret(pNotariesKeys[i], 
+                                       Params(CBaseChainParams::MAIN).Base58Prefix(CChainParams::SECRET_KEY)[0]); // DecodeSecret(pNotariesKeys[i])
+       if (nnkey.IsValid() && nnkey.IsCompressed()) {
+            const CPubKey &nn_pubkey = nnkey.GetPubKey();
+            CScript nn_p2pk_script = CScript() << ToByteVector(nn_pubkey) << OP_CHECKSIG;
+            rawTx.vout.push_back(CTxOut(NOTARY_VIN_AMOUNT, nn_p2pk_script));
+       }
+    }
+
+    CTransaction splitTx(rawTx);
+    if (splitTx.vin.size() != 1 || splitTx.vout.size() != 1 + numnotaries)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Error create split transaction.");
+
+    // TODO: sign and send splitTx transaction
+
+    return NullUniValue; // needed checks for debug unimplemented yet, so return
+
+    CBlock block;
+    CTransaction tx_nota;
+
+    block.hashMerkleRoot = block.BuildMerkleTree();
+    CBlockIndex blockIndex {block};
+    blockIndex.nHeight = chainActive.Tip()->nHeight + 1;
+    blockIndex.nTime = GetTime();
+    int32_t res = komodo_connectblock(false, &blockIndex, block);
+
+    /*
+        1. komodo_init - init genesis notaries into memory (called just once in a time)
+        2. komodo_notaries - determine season based on blockindex height or time, fill notaries pubkeys,
+                             in case of very early blocks (ht. < 180k) genesis notaries applied.
+    */
+    return NullUniValue;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
     /* Not shown in help */
     { "hidden",             "nn_getwalletinfo",            &nn_getwalletinfo,            true  },
     { "hidden",             "nn_split",                    &nn_split,                    true  },
+    { "hidden",             "nn_notarize_test",            &nn_notarize_test,            true  },
 };
 
 void RegisterNotariesRPCCommands(CRPCTable &tableRPC)
