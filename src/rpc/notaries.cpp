@@ -702,6 +702,8 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
     /* First we should send notaryvins to notaries, so, let's split across notaries addresses */
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    CBasicKeyStore nn_keyStore;
+
     // Get available utxos
     std::vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
@@ -741,6 +743,7 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
        CKey nnkey = DecodeCustomSecret(pNotariesKeys[i], 
                                        Params(CBaseChainParams::MAIN).Base58Prefix(CChainParams::SECRET_KEY)[0]); // DecodeSecret(pNotariesKeys[i])
        if (nnkey.IsValid() && nnkey.IsCompressed()) {
+            nn_keyStore.AddKey(nnkey);
             const CPubKey &nn_pubkey = nnkey.GetPubKey();
             CScript nn_p2pk_script = CScript() << ToByteVector(nn_pubkey) << OP_CHECKSIG;
             rawTx.vout.push_back(CTxOut(NOTARY_VIN_AMOUNT, nn_p2pk_script));
@@ -824,7 +827,8 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
     static arith_uint256 fake_txid_hash;
     fake_txid_hash++;
     uint256 notarizedtxid = ArithToUint256(fake_txid_hash);
-    std::string fake_txid_label = "DECKER"; std::copy_backward(fake_txid_label.begin(), fake_txid_label.end(), notarizedtxid.end());
+    std::string fake_txid_label = "DECKER"; std::reverse(fake_txid_label.begin(), fake_txid_label.end());
+    std::copy_backward(fake_txid_label.begin(), fake_txid_label.end(), notarizedtxid.end());
 
     int notarizedheight = chainActive.Height();
 
@@ -848,14 +852,29 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
 
     rawTx.vout.push_back(CTxOut(0, scriptNotaryOpRet));
 
-    // TODO: sign notary tx with hardcoded keys
+    // sign notary tx with hardcoded keys
+    for (unsigned int i = 0; i < rawTx.vin.size(); i++) {
+        const CScript& prevPubKey = splitTx.vout[1 + i].scriptPubKey;
+        const CAmount& amount = NOTARY_VIN_AMOUNT; // splitTx.vout[1 + i].nValue
+        SignatureData sigdata;
+        ProduceSignature(MutableTransactionSignatureCreator(&nn_keyStore, &rawTx, i, amount, SIGHASH_ALL), prevPubKey, sigdata, consensusBranchId);
+        UpdateTransaction(rawTx, i, sigdata);
+    }
+
+    CTransaction notaTx(rawTx);
+    bool fnotaTxSent = sendtx(notaTx, "notaTx");
 
     UniValue result(UniValue::VOBJ);
     // result.pushKV("split_tx_hex", EncodeHexTx(splitTx));
     result.pushKV("split_tx_txid", splitTx.GetHash().GetHex());
     result.pushKV("split_tx_sent", (fSplitTxSent ? "true" : "false"));
-    result.pushKV("notary_tx_hex", EncodeHexTx(CTransaction(rawTx)));
+    // result.pushKV("nota_tx_hex", EncodeHexTx(CTransaction(rawTx)));
+    result.pushKV("nota_tx_txid", notaTx.GetHash().GetHex());
+    result.pushKV("nota_tx_sent", (fnotaTxSent ? "true" : "false"));
 
+    result.pushKV("notarizedhash", notarizedhash.GetHex());
+    result.pushKV("notarizedtxid", notarizedtxid.GetHex());
+    result.pushKV("notarizedheight", notarizedheight);
 
     return result; // needed checks for debug unimplemented yet, so return
 
