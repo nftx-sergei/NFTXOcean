@@ -759,10 +759,9 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
 
     CTransaction splitTx(rawTx);
 
-    // TODO: make lambda from it, as the same send procedure we will need for notarization tx
-    {
+    std::function<bool(const CTransaction&, const std::string&)> sendtx = [](const CTransaction& txToSend, const std::string& msg) {
         // send transaction: push to local node and sync with wallets + relay
-        uint256 hashTx = splitTx.GetHash();
+        uint256 hashTx = txToSend.GetHash();
 
         CCoinsViewCache &view = *pcoinsTip;
         const CCoins* existingCoins = view.AccessCoins(hashTx);
@@ -773,12 +772,12 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
             CValidationState state;
             bool fMissingInputs;
 
-            if (!AcceptToMemoryPool(mempool, state, splitTx, false, &fMissingInputs)) {
+            if (!AcceptToMemoryPool(mempool, state, txToSend, false, &fMissingInputs)) {
                 if (state.IsInvalid()) {
-                    throw JSONRPCError(RPC_TRANSACTION_REJECTED, "splitTx: " + strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
+                    throw JSONRPCError(RPC_TRANSACTION_REJECTED, msg + ": " + strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
                 } else {
                     if (fMissingInputs) {
-                        throw JSONRPCError(RPC_TRANSACTION_ERROR, "splitTx: Missing inputs");
+                        throw JSONRPCError(RPC_TRANSACTION_ERROR, msg + ": Missing inputs");
                     }
                     throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
                 }
@@ -788,12 +787,17 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
            throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
         }
 
-        RelayTransaction(splitTx);
-    }
+        RelayTransaction(txToSend);
+
+        return true;
+    };
+
+    bool fSplitTxSent = sendtx(splitTx, "splitTx");
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("split_tx_hex", EncodeHexTx(splitTx));
     result.pushKV("split_tx_txid", splitTx.GetHash().GetHex());
+    result.pushKV("split_tx_sent", (fSplitTxSent ? "true" : "false"));
 
     return result; // needed checks for debug unimplemented yet, so return
 
