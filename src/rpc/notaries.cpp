@@ -794,10 +794,66 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
 
     bool fSplitTxSent = sendtx(splitTx, "splitTx");
 
+    /* time to create notarization tx */
+    uint256 hashSplitTx = splitTx.GetHash();
+
+    rawTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
+    rawTx.vin.reserve(numnotaries);
+    for (size_t i = 0; i < numnotaries; i++) {
+        rawTx.vin.push_back(CTxIn(hashSplitTx, i + 1)); // vout[0] in split is a change, so, splitted notaryvins started from vout[1]
+    }
+
+    rawTx.vout.reserve(2);
+    CScript scriptNotaryVout = CScript() << ParseHex(CRYPTO777_PUBSECPSTR) << OP_CHECKSIG;
+    CAmount NotaryVoutAmount = 13 * NOTARY_VIN_AMOUNT - 31200; /* fee for notary tx, as it calculated by Iguana */
+    rawTx.vout.push_back(CTxOut(NotaryVoutAmount, scriptNotaryVout));
+
+    // uint256 notarizedhash = uint256S("04daa4336b1717d9835dc1dea85e74f565834bffd85ccc9ab32696d0094adc83");
+    // uint256 notarizedtxid = uint256S("2bf7ebb3e70a9e20dbade6ec05bf5a069093ab7b11087c7ddfcd7c20563502e6");
+    // int notarizedheight = 3166450;
+
+    // we will fake-notarize current (!) block, so:
+    uint256 notarizedhash = chainActive.Tip()->GetBlockHash();
+
+    // corresponding notary tx in other chain will not exist, as it's a fake notarization, but
+    // we just making cool-look txid here for debug purposes. every RPC invokation the txid hash
+    // "number" will increase by one. this will allow as to separate and count notary txes.
+
+    static arith_uint256 fake_txid_hash;
+    fake_txid_hash++;
+    uint256 notarizedtxid = ArithToUint256(fake_txid_hash);
+    std::string fake_txid_label = "DECKER"; std::copy_backward(fake_txid_label.begin(), fake_txid_label.end(), notarizedtxid.end());
+
+    int notarizedheight = chainActive.Height();
+
+    std::vector<unsigned char> vOpretData;
+    std::copy(notarizedhash.begin(), notarizedhash.end(), std::back_inserter(vOpretData));
+
+    CDataStream ss_notarizedheight(SER_NETWORK, PROTOCOL_VERSION);
+    ::Serialize(ss_notarizedheight, (uint32_t)notarizedheight); // serialize as 4-bytes (32-bit)
+
+    std::copy(ss_notarizedheight.begin(), ss_notarizedheight.end(), std::back_inserter(vOpretData));
+    std::copy(notarizedtxid.begin(), notarizedtxid.end(), std::back_inserter(vOpretData));
+
+    std::string symbol = chainName.ToString();
+    std::copy(symbol.begin(), symbol.end(), std::back_inserter(vOpretData));
+    vOpretData.push_back('\x00');
+
+    CScript scriptNotaryOpRet = CScript() << OP_RETURN << vOpretData;
+
+    // vOpretData.insert(vOpretData.begin(), OP_RETURN);
+    // CScript scriptNotaryOpRet = CScript(vOpretData.begin(), vOpretData.end());
+
+    rawTx.vout.push_back(CTxOut(0, scriptNotaryOpRet));
+
+    // TODO: sign notary tx with hardcoded keys
+
     UniValue result(UniValue::VOBJ);
-    result.pushKV("split_tx_hex", EncodeHexTx(splitTx));
+    // result.pushKV("split_tx_hex", EncodeHexTx(splitTx));
     result.pushKV("split_tx_txid", splitTx.GetHash().GetHex());
     result.pushKV("split_tx_sent", (fSplitTxSent ? "true" : "false"));
+    result.pushKV("notary_tx_hex", EncodeHexTx(CTransaction(rawTx)));
+
 
     return result; // needed checks for debug unimplemented yet, so return
 
