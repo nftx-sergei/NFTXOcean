@@ -354,7 +354,7 @@ public:
         strNetworkID = "test";
         strCurrencyUnits = "TKMD";
         bip44CoinType = 1;
-        consensus.fCoinbaseMustBeProtected = true;
+        consensus.fCoinbaseMustBeProtected = false;
         consensus.nSubsidySlowStartInterval = 20000;
         consensus.nSubsidyHalvingInterval = 840000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
@@ -383,9 +383,10 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_TESTDUMMY].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170003;
-        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 207500;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
+        coinbaseMaturity = 1;
 
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
@@ -435,7 +436,19 @@ public:
         fTestnetToBeDeprecatedFieldRPC = true;
 
         genesisNotaries = { 
-                { "jmj_testA",   "037c032430fd231b5797cb4a637dae3eadf87b10274fd84be31670bd2a02c4fbc5" }
+               { "testnet_nn_00", "0300483d40eebc26151a79927a5dcf2db33d922f2c609e14389a307e37e1dbdaff" },
+               { "testnet_nn_01", "030cb14d10818be206c119ebe8cd0474258f7b1e021c663a3ef46085e7f0a5b51f" },
+               { "testnet_nn_02", "027a5418c54ea72802a6c66af28e2cf04be607dc1f89b2e23b17a1fe6cfa3290b2" },
+               { "testnet_nn_03", "02ec7d5c60150a0ea033aa1609fbb12834492815c00d01079cdaa7e27394f988cc" },
+               { "testnet_nn_04", "02ec116f12fbb1cde0979ae2d28d50cc106c2099361608e040db46ce92de254c65" },
+               { "testnet_nn_05", "02bda26d85f0c71e9466fac8ba67485a4c3adcc41956260f6678577cabc14aa995" },
+               { "testnet_nn_06", "02288b84cebe8d7766ba251405b314a07f692c9c680c9bbf37feb28c4a1f0bf369" },
+               { "testnet_nn_07", "028b79e28dc94fb3b83c3390df6432ed78610290afca08a917d5544e9ac2f928db" },
+               { "testnet_nn_08", "03d3e79a94cbcf9f759df86c4147c46357080e88087e2427f9a8dda179c3b32eb1" },
+               { "testnet_nn_09", "0394215dc26aa65bc7dd97c839a2f48b94384016df98f7435870673d0118c6df2b" },
+               { "testnet_nn_10", "0211156d6fb6d40cd7a46e1eaf08cbc9fd1f1dfd95a55618af6200401f37e5af59" },
+               { "testnet_nn_11", "034729e9448b8480be2e09d414d39eecd7fa242aca930d272ba3ddfd8f533e82f5" },
+               { "testnet_nn_12", "03dfe75d9ab5e365dada19db384bb4822076526ba938a828a87452d957c7fb332b" }
         };
     }
 };
