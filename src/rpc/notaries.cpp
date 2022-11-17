@@ -553,6 +553,8 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
         "UuMgdqQsPsGVZqKL3r8CY7CzvyUQW5K8DrpMYz9ZGtufmsuUv8ni", // 03dfe75d9ab5e365dada19db384bb4822076526ba938a828a87452d957c7fb332b - RLCBw7FBsL4JDDnummEeEKxffuRA5Q9R6F
     };
 
+    const size_t pNotariesKeys_size = sizeof(pNotariesKeys)/sizeof(pNotariesKeys[0]);
+
     /*
         Now we need make notaryvins for all of these 13 addresses above, i.e. make 0.00010000 TKMD p2pk utxo for each of notaries,
         and after make a notarization tx with needed parameters.
@@ -708,10 +710,10 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Haven't any utxos in the wallet.");
     }
 
-    uint8_t tmp_pubkeys[64][33];
-    int32_t numnotaries = komodo_notaries(tmp_pubkeys,chainActive.Tip()->nHeight + 1, GetTime());
+    // uint8_t tmp_pubkeys[64][33];
+    // int32_t numnotaries = komodo_notaries(tmp_pubkeys,chainActive.Tip()->nHeight + 1, GetTime());
 
-    CAmount totalSplitTxValue = numnotaries * NOTARY_VIN_AMOUNT + NN_SPLIT_DEFAULT_MINERS_FEE;
+    CAmount totalSplitTxValue = pNotariesKeys_size * NOTARY_VIN_AMOUNT + NN_SPLIT_DEFAULT_MINERS_FEE;
 
     std::vector<COutput>::iterator utxo_to_split_iter = std::find_if(vecOutputs.begin(), vecOutputs.end(), [totalSplitTxValue](const COutput& utxo) { 
         const CTxOut& txOut = utxo.tx->vout[utxo.i];
@@ -727,7 +729,7 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
     CMutableTransaction rawTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
     rawTx.vin.push_back(CTxIn(utxo_to_split_iter->tx->GetHash(), utxo_to_split_iter->i));
 
-    rawTx.vout.reserve(1 + numnotaries);
+    rawTx.vout.reserve(1 + pNotariesKeys_size);
 
     // vout: add change as first vout
     const CTxOut& prevOut = utxo_to_split_iter->tx->vout[utxo_to_split_iter->i]; 
@@ -735,7 +737,7 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
     rawTx.vout.push_back(CTxOut(sendAmount, prevOut.scriptPubKey));
 
     // vout: add notary vins for all notaries
-    for (size_t i = 0; i < numnotaries; i++) {
+    for (size_t i = 0; i < pNotariesKeys_size; i++) {
        CKey nnkey = DecodeCustomSecret(pNotariesKeys[i], 
                                        Params(CBaseChainParams::MAIN).Base58Prefix(CChainParams::SECRET_KEY)[0]); // DecodeSecret(pNotariesKeys[i])
        if (nnkey.IsValid() && nnkey.IsCompressed()) {
@@ -745,7 +747,7 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
        }
     }
 
-    if (rawTx.vin.size() != 1 || rawTx.vout.size() != 1 + numnotaries)
+    if (rawTx.vin.size() != 1 || rawTx.vout.size() != 1 + pNotariesKeys_size)
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Error create split transaction.");
 
     uint32_t consensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
@@ -798,8 +800,8 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
     uint256 hashSplitTx = splitTx.GetHash();
 
     rawTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
-    rawTx.vin.reserve(numnotaries);
-    for (size_t i = 0; i < numnotaries; i++) {
+    rawTx.vin.reserve(pNotariesKeys_size);
+    for (size_t i = 0; i < pNotariesKeys_size; i++) {
         rawTx.vin.push_back(CTxIn(hashSplitTx, i + 1)); // vout[0] in split is a change, so, splitted notaryvins started from vout[1]
     }
 
