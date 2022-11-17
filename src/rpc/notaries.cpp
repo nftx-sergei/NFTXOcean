@@ -745,13 +745,57 @@ UniValue nn_notarize_test(const UniValue& params, bool fHelp, const CPubKey& myp
        }
     }
 
-    CTransaction splitTx(rawTx);
-    if (splitTx.vin.size() != 1 || splitTx.vout.size() != 1 + numnotaries)
+    if (rawTx.vin.size() != 1 || rawTx.vout.size() != 1 + numnotaries)
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Error create split transaction.");
 
-    // TODO: sign and send splitTx transaction
+    uint32_t consensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
 
-    return NullUniValue; // needed checks for debug unimplemented yet, so return
+    // we have 1 vin here, so, it should be easy to sign
+    SignatureData sigdata;
+    const CKeyStore& keystore = *pwalletMain;
+    auto mtsg = MutableTransactionSignatureCreator(&keystore, &rawTx, 0 /* vin number */, prevOut.nValue, SIGHASH_ALL);
+    ProduceSignature(mtsg, prevOut.scriptPubKey, sigdata, consensusBranchId);
+    UpdateTransaction(rawTx, 0 /* vin number */, sigdata);
+
+    CTransaction splitTx(rawTx);
+
+    // TODO: make lambda from it, as the same send procedure we will need for notarization tx
+    {
+        // send transaction: push to local node and sync with wallets + relay
+        uint256 hashTx = splitTx.GetHash();
+
+        CCoinsViewCache &view = *pcoinsTip;
+        const CCoins* existingCoins = view.AccessCoins(hashTx);
+        bool fHaveMempool = mempool.exists(hashTx);
+        bool fHaveChain = existingCoins && existingCoins->nHeight < 1000000000;
+        if (!fHaveMempool && !fHaveChain) {
+
+            CValidationState state;
+            bool fMissingInputs;
+
+            if (!AcceptToMemoryPool(mempool, state, splitTx, false, &fMissingInputs)) {
+                if (state.IsInvalid()) {
+                    throw JSONRPCError(RPC_TRANSACTION_REJECTED, "splitTx: " + strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
+                } else {
+                    if (fMissingInputs) {
+                        throw JSONRPCError(RPC_TRANSACTION_ERROR, "splitTx: Missing inputs");
+                    }
+                    throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
+                }
+            }
+
+        } else if (fHaveChain) {
+           throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
+        }
+
+        RelayTransaction(splitTx);
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("split_tx_hex", EncodeHexTx(splitTx));
+    result.pushKV("split_tx_txid", splitTx.GetHash().GetHex());
+
+    return result; // needed checks for debug unimplemented yet, so return
 
     CBlock block;
     CTransaction tx_nota;
