@@ -116,13 +116,13 @@ def main():
         nodes.append(start_node(i, '/tmp', ["-testnet"]))
 
     test_node = TestNode()
-    NetworkThread().start()
 
     connections = []
     # list of classed provided p2p connections to a node
     # add p2p connection to Node #1 and pass it via p2p its set of blocks
     connections.append(NodeConn('127.0.0.1', p2p_port(0), nodes[0], test_node, "testnet3", 170011))
     test_node.add_connection(connections[0])
+    NetworkThread().start()
     test_node.wait_for_verack()
     time.sleep(1) # here we should wait for genesis import, otherwise node will reject block with ht.1
     blocks_file = open('node-1.hex', 'r')
