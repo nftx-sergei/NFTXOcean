@@ -68,8 +68,8 @@ namespace IsFinalTxTest {
 
         mtx.nLockTime = nLockTimeIn;
 
-        static size_t tx_count;
-        std::cerr << ++tx_count << ". " << CTransaction(mtx).ToString() << std::endl;
+        // static size_t tx_count;
+        // std::cerr << ++tx_count << ". " << CTransaction(mtx).ToString() << std::endl;
 
         return mtx;
     }
