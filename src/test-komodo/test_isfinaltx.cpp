@@ -6,6 +6,9 @@
 #include "chainparams.h"
 #include "core_io.h"
 #include "utilstrencodings.h"
+#include "komodo_hardfork.h"
+#include "assetchain.h"
+#include "main.h" // isFinalTx
 
  // ./komodo-test --gtest_filter=IsFinalTxTest.*
 namespace IsFinalTxTest {
@@ -21,6 +24,53 @@ namespace IsFinalTxTest {
             number = number | mask;
         }
         return ArithToUint256(number);
+    }
+
+    void DeleteFakeChain() {
+        chainActive.SetTip(nullptr); // this will clear chainActive.vChain
+        for (BlockMap::value_type& entry : mapBlockIndex) {
+            delete entry.second;
+        }
+        mapBlockIndex.clear();
+    }
+
+    void CreateFakeChain(int nDesiredHeight, bool fClearChain = true) {
+
+        /* inside komodo_hardfork_active we have chainActive.Height() call to determine current
+           height for KMD, so we should emulate the chain */
+
+        uint256 zero; zero.SetNull();
+
+        if (fClearChain) {
+            DeleteFakeChain();
+        }
+
+        int maxHeight = chainActive.Height();
+        for (int i = 0; i < (nDesiredHeight - maxHeight); ++i) {
+            CBlock block;
+            block.hashPrevBlock = chainActive.Tip() ? chainActive.Tip()->GetBlockHash() : zero;
+
+            uint256 hash = block.GetHash();
+            // std::cerr << i << ": " << hash.ToString() << std::endl;
+
+            // kind of AddToBlockIndex emulation
+            CBlockIndex* pindexNew = new CBlockIndex(block); // Construct new block index object
+            BlockMap::iterator mi = mapBlockIndex.insert(std::make_pair(hash, pindexNew)).first;
+            pindexNew->phashBlock = &((*mi).first);
+            pindexNew->nHeight = i + maxHeight + 1;
+            pindexNew->pprev = chainActive.Tip();
+            mi->second = pindexNew;
+
+            chainActive.SetTip(pindexNew);
+        }
+
+        // CBlockIndex *pindex = nullptr;
+        // for (int i = 0; i < nDesiredHeight; ++i) {
+        //     pindex = chainActive[i];
+        //     if (pindex) {
+        //         std::cerr << pindex->nHeight << ": " << pindex->GetBlockHash().ToString() << " (prev:" << (pindex->pprev ? pindex->pprev->GetBlockHash().ToString() : zero.ToString()) << ")" << std::endl;
+        //     }
+        // }
     }
 
     /// @brief Create CMutableTransaction with the following params:
@@ -119,4 +169,71 @@ namespace IsFinalTxTest {
         EXPECT_TRUE(IsFinalTxBitcoin(CTransaction(BuildTransactionTemplate(tbh + 1, 1, 0)), tbh, tbt));
     }
 
+
+    TEST(IsFinalTxTest, isfinaltxkomodo) {
+
+        int sapling_activation_height = 1140409;
+        int64_t sapling_block_time = 1544835390;
+
+        int tbh = nDecemberHardforkHeight;
+        int64_t tbt = nStakedDecemberHardforkTimestamp;
+
+        CreateFakeChain(tbh, true);
+
+        /* common cases, when nLockTime = 0 or nLockTime < nBlockHeight | nBlockTime */
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(0, 1, 1, 0)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh - 1, 1, 1, 0)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt - 1, 1, 1, 0)), tbh, tbt));
+
+        /* first we will do the test for before December 2019 hardfork values */
+
+        /* before hardfork tx with vin with nSequence == 0xfffffffe treated as final if
+           nLockTime > (nBlockTime | nBlockHeight), such vins considered same way as vins with
+           Sequence == 0xffffffff. all other sequences in vins should be considered same way as in bitcoin,
+           if vin have "non-final" sequence and nLockTime >= (nBlockTime | nBlockHeight) it should be
+           considered as non-final.
+        */
+
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh + 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh + 1, 1, 1, 777)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 1, 777)), tbh, tbt));
+
+        // all vins have SEQUENCE_FINAL, so it's final
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 0)), tbh, tbt));
+
+        /* after let's "jump" into hardfork times, we will increase tbh and tbt to match HF times, as
+           komodo_hardfork_active using chainActive.Height() we should create fake chain */
+        tbh++; tbt++;
+        CreateFakeChain(tbh, false); // this will just update the fake chain to desired height, not re-create from scratch
+
+        /* after hardfork we consider nSequence == 0xfffffffe as final if nLockTime <= (nBlockTime | nBlockHeight) */
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh - 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt - 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh + 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 1, MAX_SEQUENCE_NONFINAL)), tbh, tbt));
+
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh - 1 , 1, 1, 777)), tbh, tbt));
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt - 1, 1, 1, 777)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh, 1, 1, 777)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt, 1, 1, 777)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbh + 1, 1, 1, 777)), tbh, tbt));
+        EXPECT_FALSE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 1, 777)), tbh, tbt));
+
+        // all vins have SEQUENCE_FINAL, so it's final
+        EXPECT_TRUE(IsFinalTx(CTransaction(BuildTransactionTemplate(tbt + 1, 1, 0)), tbh, tbt));
+
+        DeleteFakeChain();
+
+        EXPECT_EQ(mapBlockIndex.size(), 0);
+        EXPECT_EQ(chainActive.Height(), -1);
+    }
 }
