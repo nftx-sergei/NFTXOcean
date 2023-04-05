@@ -109,6 +109,7 @@ using namespace std;
 extern void ThreadSendAlert();
 //extern bool komodo_dailysnapshot(int32_t height);  //todo remove
 //extern int32_t KOMODO_SNAPSHOT_INTERVAL;
+#include "prometheus-metrics.h"
 
 ZCJoinSplit* pzcashParams = NULL;
 
@@ -1358,6 +1359,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Count uptime
     MarkStartTime();
+
+    LogPrintf("Prometheus Metric Initialized: %s\n", IsMetricsInitialized());
 
     if ((chainparams.NetworkIDString() != "regtest") &&
             GetBoolArg("-showmetrics", 0) &&

@@ -319,6 +319,7 @@ libbitcoin_server_a_SOURCES = \
   paymentdisclosuredb.cpp \
   policy/fees.cpp \
   pow.cpp \
+  prometheus-metrics.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
   rpc/crosschain.cpp \
@@ -547,7 +548,8 @@ komodod_LDADD = \
   $(LIBMEMENV) \
   $(LIBSECP256K1) \
   $(LIBCRYPTOCONDITIONS) \
-  $(CURL_LIBS)
+  $(CURL_LIBS) \
+  $(PROMETHEUS_CPP_LIBS)
 
 if ENABLE_ZMQ
 komodod_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
@@ -569,8 +571,7 @@ komodod_LDADD += \
   $(LIBZCASH) \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBSNARK) \
-  $(LIBZCASH_LIBS) \
-  $(PROMETHEUS_CPP_LIBS)
+  $(LIBZCASH_LIBS)
 
 komodod_LDADD += $(LIBSECP256K1)
 
