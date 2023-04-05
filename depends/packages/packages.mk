@@ -57,6 +57,7 @@ native_packages := native_ccache
 wallet_packages=bdb
 
 packages := boost openssl libevent zeromq $(zcash_packages) googletest libcurl # googlemock
+linux_packages := prometheus_cpp
 
 ifneq ($(build_os),darwin)
 darwin_native_packages += native_cctools native_libtapi native_cdrkit
