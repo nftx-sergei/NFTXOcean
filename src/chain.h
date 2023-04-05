@@ -32,6 +32,7 @@
 #include <vector>
 
 #include <boost/foreach.hpp>
+#include "prometheus-metrics.h"
 
 extern CCriticalSection cs_main;
 
@@ -276,6 +277,7 @@ public:
         nBits          = block.nBits;
         nNonce         = block.nNonce;
         nSolution      = block.nSolution;
+        MetricsIncrementCounter("komodod.debug.memory.allocated_equihash_solutions");
     }
 
     CDiskBlockPos GetBlockPos() const {

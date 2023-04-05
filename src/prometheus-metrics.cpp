@@ -28,8 +28,11 @@ private:
     std::unique_ptr<Exposer> my_exposer;
     std::shared_ptr<Registry> my_registry;
     prometheus::Family<prometheus::Counter> &ref_read_solutions_counter;
+    prometheus::Family<prometheus::Counter> &ref_memory_solutions_counter;
     prometheus::Counter &counter_komodod_debug_blocktree_write_batch_read_dbindex;
     prometheus::Counter &counter_komodod_debug_blocktree_trimmed_equihash_read_dbindex;
+    prometheus::Counter &counter_komodod_debug_memory_trimmed_equihash_solutions;
+    prometheus::Counter &counter_komodod_debug_memory_allocated_equihash_solutions;
 
     std::map<std::string, prometheus::Counter &> countersMap;
 
@@ -37,13 +40,18 @@ private:
     CPrometheusMetrics() : my_exposer(new Exposer("127.0.0.1:9191")),
                            my_registry(std::make_shared<Registry>()),
                            // add a new counter family to the registry (families combine values with the same name, but distinct label dimensions)
-                           ref_read_solutions_counter(BuildCounter().Name("solutions_read_total").Help("Number of read solutions").Register(*my_registry)),
+                           ref_read_solutions_counter(BuildCounter().Name("solutions_read_total").Help("Number of read from disk solutions").Register(*my_registry)),
+                           ref_memory_solutions_counter(BuildCounter().Name("solutions_memory_total").Help("Number of solutions in memory").Register(*my_registry)),
                             // add and remember dimensional data
                            counter_komodod_debug_blocktree_write_batch_read_dbindex(ref_read_solutions_counter.Add({{"name", "komodod.debug.blocktree.write_batch_read_dbindex"}})),
-                           counter_komodod_debug_blocktree_trimmed_equihash_read_dbindex(ref_read_solutions_counter.Add({{"name", "komodod.debug.blocktree.trimmed_equihash_read_dbindex"}}))
+                           counter_komodod_debug_blocktree_trimmed_equihash_read_dbindex(ref_read_solutions_counter.Add({{"name", "komodod.debug.blocktree.trimmed_equihash_read_dbindex"}})),
+                           counter_komodod_debug_memory_trimmed_equihash_solutions(ref_memory_solutions_counter.Add({{"name", "komodod.debug.memory.trimmed_equihash_solutions"}})),
+                           counter_komodod_debug_memory_allocated_equihash_solutions(ref_memory_solutions_counter.Add({{"name", "komodod.debug.memory.allocated_equihash_solutions"}}))
     {
         countersMap.insert({"komodod.debug.blocktree.write_batch_read_dbindex", counter_komodod_debug_blocktree_write_batch_read_dbindex});
         countersMap.insert({"komodod.debug.blocktree.trimmed_equihash_read_dbindex", counter_komodod_debug_blocktree_trimmed_equihash_read_dbindex});
+        countersMap.insert({"komodod.debug.memory.trimmed_equihash_solutions", counter_komodod_debug_memory_trimmed_equihash_solutions});
+        countersMap.insert({"komodod.debug.memory.allocated_equihash_solutions", counter_komodod_debug_memory_allocated_equihash_solutions});
 
         my_exposer->RegisterCollectable(my_registry);
         fMetricInitialized = true;

@@ -35,6 +35,7 @@
 #include <stdint.h>
 
 #include <boost/thread.hpp>
+#include "prometheus-metrics.h"
 
 using namespace std;
 
@@ -298,6 +299,7 @@ bool CBlockTreeDB::WriteBatchSync(const std::vector<std::pair<int, const CBlockF
         std::pair<char, uint256> key = make_pair(DB_BLOCK_INDEX, it->GetBlockHash());
         try {
             CDiskBlockIndex dbindex {it, [this, &key]() {
+                MetricsIncrementCounter("komodod.debug.blocktree.write_batch_read_dbindex");
                 // It can happen that the index entry is written, then the Equihash solution is cleared from memory,
                 // then the index entry is rewritten. In that case we must read the solution from the old entry.
                 CDiskBlockIndex dbindex_old;
