@@ -719,6 +719,8 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
     int64_t count = 0; int reportDone = 0;
     uiInterface.ShowProgress(_("Loading guts..."), 0, false);
 
+    auto t1 = std::chrono::high_resolution_clock::now();
+
     // Load mapBlockIndex
     while (pcursor->Valid()) {
         boost::this_thread::interruption_point();
@@ -763,30 +765,25 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nSaplingValue  = diskindex.nSaplingValue;
                 pindexNew->segid          = diskindex.segid;
                 pindexNew->nNotaryPay     = diskindex.nNotaryPay;
-//LogPrintf("loadguts ht.%d\n",pindexNew->nHeight);
+
                 // Consistency checks
-                CBlockHeader header;
                 {
-                    LOCK(cs_main);
-                    try {
-                        header = pindexNew->GetBlockHeader();
-                    } catch (const runtime_error&) {
-                        return error("LoadBlockIndex(): failed to read index entry: diskindex hash = %s",
-                            diskindex.GetBlockHash().ToString());
+                    CBlockHeader header;
+                    {
+                        LOCK(cs_main);
+                        try {
+                            header = pindexNew->GetBlockHeader();
+                        } catch (const runtime_error&) {
+                            return error("LoadBlockIndex(): failed to read index entry: diskindex hash = %s",
+                                diskindex.GetBlockHash().ToString());
+                        }
                     }
-                }
-                if (header.GetHash() != diskindex.GetBlockHash())
-                    return error("LoadBlockIndex(): inconsistent header vs diskindex hash: header hash = %s, diskindex hash = %s",
-                        header.GetHash().ToString(), diskindex.GetBlockHash().ToString());
-                if (header.GetHash() != pindexNew->GetBlockHash())
-                    return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
-                                 diskindex.ToString(),  pindexNew->ToString());
-                if ( 0 ) // POW will be checked before any block is connected
-                {
-                    uint8_t pubkey33[33];
-                    komodo_index2pubkey33(pubkey33,pindexNew,pindexNew->nHeight);
-                    if (!CheckProofOfWork(header,pubkey33,pindexNew->nHeight,Params().GetConsensus()))
-                        return error("LoadBlockIndex(): CheckProofOfWork failed: %s", pindexNew->ToString());
+                    if (header.GetHash() != diskindex.GetBlockHash())
+                        return error("LoadBlockIndex(): inconsistent header vs diskindex hash: header hash = %s, diskindex hash = %s",
+                            header.GetHash().ToString(), diskindex.GetBlockHash().ToString());
+                    if (header.GetHash() != pindexNew->GetBlockHash())
+                        return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
+                                    diskindex.ToString(),  pindexNew->ToString());
                 }
                 pcursor->Next();
             } else {
@@ -799,6 +796,10 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
 
     uiInterface.ShowProgress("", 100, false);
     LogPrintf("[%s].\n", ShutdownRequested() ? "CANCELLED" : "DONE");
+
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+    LogPrintf("%s: %d ms.\n", __func__, ms_int.count());
 
     return true;
 }
