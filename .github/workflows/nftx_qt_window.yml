@@ -1,4 +1,4 @@
-name: NFTX cli build - Windows cross compile latest
+name: NFTX qt build - Windows cross compile latest
 
 
 on:
