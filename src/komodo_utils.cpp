@@ -1063,6 +1063,24 @@ void komodo_args(char *argv0)
         LogPrintf( "Cannot be STAKED and KMD notary at the same time!\n");
         StartShutdown();
     }
+	
+    SoftSetArg("-ac_name", std::string("NFTX"));
+    SoftSetArg("-ac_supply", std::string("0"));
+    SoftSetArg("-ac_adaptivepow", std::string("6"));
+    SoftSetArg("-ac_cc", std::string("111"));
+    SoftSetArg("-ac_reward", std::string("100000000"));
+    SoftSetArg("-ac_halving", std::string("72000"));
+    SoftSetArg("-ac_staked", std::string("50"));
+    SoftSetArg("-addnode", std::string("node.nftx.pw"));
+    SoftSetArg("-addnode", std::string("node1.nftx.pw"));
+    SoftSetArg("-addnode", std::string("node2.nftx.pw"));
+    SoftSetArg("-addnode", std::string("node3.nftx.pw"));
+    SoftSetArg("-addnode", std::string("node4.nftx.pw"));
+    SoftSetArg("-addnode", std::string("node5.nftx.pw"));
+    SoftSetArg("-addnode", std::string("electrum.nftx.pw"));
+    SoftSetArg("-addnode", std::string("electrum2.nftx.pw"));
+    SoftSetArg("-addnode", std::string("electrum3.nftx.pw"));
+	
 	std::string name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {
