@@ -33,9 +33,9 @@ jobs:
         run: |
           ./zcutil/build-mac.sh -j4
           mv src/qt/komodo-qt src/qt/NFTX-qt-osx
-          zip --junk-paths NFTX-qt-mac src/qt/NFTX-qt-osx
+          zip --junk-paths NFTX-qt-osx src/qt/NFTX-qt-osx
       - name: Upload NFTX-qt-osx.zip as artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
           name: NFTX-qt-osx
           path: ./NFTX-qt-osx.zip
