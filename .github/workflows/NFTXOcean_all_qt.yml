@@ -1,0 +1,101 @@
+name: NFTXOcean Auto-build
+
+on:
+  push:
+    branches:
+    - static
+
+jobs:
+
+  linux-build:
+    name: Linux Build
+    runs-on: ubuntu-18.04
+    steps:
+
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+
+      - name: Shortify commit sha
+        shell: bash
+        run: echo "##[set-output name=sha_short;]$(echo ${GITHUB_SHA::7})"
+        id: shortify_commit
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install deps (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade -y
+          sudo apt-get install -q autoconf automake bsdmainutils build-essential g++-multilib libc6-dev libcurl4-gnutls-dev libtool ncurses-dev python-zmq unzip zlib1g-dev -y
+      - name: Build (Linux)
+        run: |
+          ./zcutil/build.sh
+          mv src/qt/komodo-qt src/qt/NFTX-qt-linux
+          zip --junk-paths NFTX-qt-linux src/qt/NFTX-qt-linux
+      - name: Upload NFTX-qt-linux.zip as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: NFTX-qt-linux
+          path: ./NFTX-qt-linux.zip
+
+  Mac-build:
+    name: Mac Build
+    runs-on: macos-10.15
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install deps (macOS)
+        run: |
+          brew uninstall openssl@1.0.2t
+          brew uninstall python@2.7.17
+          brew untap local/openssl
+          brew untap local/python2
+          brew update
+          brew upgrade
+          brew tap discoteq/discoteq
+          brew install autoconf autogen automake
+          brew install binutils
+          brew install coreutils
+          brew install flock
+          brew install gcc@6
+          brew install protobuf
+      - name: Build (macOS)
+        run: |
+          ./zcutil/build-mac.sh
+          mv src/qt/komodo-qt src/qt/NFTX-qt-mac
+          zip --junk-paths NFTX-qt-mac src/qt/NFTX-qt-mac
+      - name: Upload NFTX-qt-mac.zip as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: NFTX-qt-mac
+          path: ./NFTX-qt-mac.zip
+
+  windows-build:
+    name: Windows Build (mingw)
+    runs-on: ubuntu-18.04
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install deps (Windows)
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade -y
+          sudo apt-get install -q autoconf automake bsdmainutils build-essential g++-multilib libboost-all-dev libc6-dev libcurl4-gnutls-dev libdb++-dev libevent-dev libncurses-dev libprotobuf-dev -y
+          sudo apt-get install -q libqrencode-dev libsodium-dev libssl-dev libtool mingw-w64 ncurses-dev protobuf-compiler python-zmq software-properties-common zlib1g-dev -y
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup target add x86_64-pc-windows-gnu
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+      - name: Build (Windows)
+        run: |
+          ./zcutil/build-win.sh
+          mv src/qt/komodo-qt.exe src/qt/NFTX-qt-win.exe
+          zip --junk-paths NFTX-qt-win src/qt/NFTX-qt-win.exe
+      - name: Upload NFTX-qt-win.zip as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: NFTX-qt-win
+          path: ./NFTX-qt-win.zip   
