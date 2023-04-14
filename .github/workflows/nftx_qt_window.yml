@@ -34,8 +34,8 @@ jobs:
           ./zcutil/build-win.sh -j$(nproc)
           mv src/qt/komodo-qt.exe src/qt/NFTX-qt-win.exe
           zip --junk-paths NFTX-qt-win src/qt/NFTX-qt-win.exe
-      - name: Upload NFTX-win.zip as artifact
+      - name: Upload NFTX-qt-win.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: NFTX-win
-          path: ./NFTX-win.zip
+          name: NFTX-qt-win
+          path: ./NFTX-qt-win.zip
